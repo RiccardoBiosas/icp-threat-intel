@@ -1,0 +1,107 @@
+# Seed IOCs: the verified facts from SPEC.md section 3, and nothing else.
+# Loaded by `icp-threat-intel db seed` (`--dry-run` prints what would load).
+#
+# Provenance rules:
+# - Each IOC carries its original publisher's source type (threatfox, vendor_rss), never
+#   a separate "seed" type, so the seed cannot count as an extra signal (OPEN_QUESTIONS T01).
+# - SPEC names the CanisterWorm/CanisterSprawl write-ups' publishers but gives no URLs, so
+#   those `source_url` values are empty rather than guessed (OPEN_QUESTIONS T05).
+# - The unverified 1 September 2026 claim (hypothesis H6) is not an IOC and is not seeded.
+
+version: 1
+
+sources:
+  - name: threatfox
+    source_type: threatfox
+    base_url: https://threatfox.abuse.ch
+  - name: vendor-reports
+    source_type: vendor_rss
+    base_url: ""
+
+campaigns:
+  - name: CanisterWorm
+    start: "2026-03-19"
+    end: "2026-03-22"
+    actor: TeamPCP
+    summary: >-
+      TeamPCP compromised the Trivy scanner, then npm packages. Canister
+      tdtqy-oyaaa-aaaae-af2dq-cai served as a dead-drop resolver: a Python backdoor polled it
+      roughly every 50 minutes, and an update_link method let the operator rotate the payload
+      URL without redeploying. First documented use of an ICP canister as C2. 141 artifacts
+      and 66+ packages. Governance took about 26 hours after disclosure to disable the
+      canister; a disabled canister can be re-enabled.
+    publishers: [Cloud Security Alliance, Aikido, JFrog, Socket]
+    source_urls: []
+  - name: CanisterSprawl
+    start: "2026-04-21"
+    end: "2026-04-23"
+    actor: null
+    summary: >-
+      A second wave hit Namastex.ai tooling on npm and PyPI, with cross-ecosystem propagation
+      via .pth injection. Canister cjn37-uyaaa-aaaac-qgnva-cai was used for exfiltration
+      rather than C2.
+    publishers: []
+    source_urls: []
+
+iocs:
+  - ioc_type: canister_id
+    value: tdtqy-oyaaa-aaaae-af2dq-cai
+    campaign: CanisterWorm
+    source: vendor-reports
+    source_ref: "campaign:CanisterWorm"
+    source_url: ""
+    notes: >-
+      Dead-drop C2 resolver; update_link rotated the payload URL. Disabled by governance about
+      26 hours after disclosure; can be re-enabled.
+
+  - ioc_type: canister_id
+    value: cjn37-uyaaa-aaaac-qgnva-cai
+    campaign: CanisterSprawl
+    source: vendor-reports
+    source_ref: "campaign:CanisterSprawl"
+    source_url: ""
+    notes: Used for exfiltration rather than C2.
+
+  - ioc_type: url
+    value: https://tdtqy-oyaaa-aaaae-af2dq-cai.raw.icp0.io/
+    campaign: null
+    source: threatfox
+    source_ref: "threatfox:1781006"
+    source_url: https://threatfox.abuse.ch/ioc/1781006/
+    threat_type: payload_delivery
+    malware: Unknown malware
+    confidence: 90
+    first_seen: "2026-04-04T11:52:12Z"
+    last_seen: null
+    expires_at: "2026-10-05T01:15:01Z"
+    reporter: tipo_deincognito
+    tags: [ICP-C2, npm-worm, supply-chain, systemd-dropper]
+    notes: >-
+      Reporter note: npm @opengov/form-renderer 0.2.20 used the canister as C2 to deliver a
+      binary payload to /tmp/pglog, executed via a persistent systemd user service
+      pgmon.service, as part of a 3-stage attack including an npm worm spread with a stolen
+      _authToken.
+
+  - ioc_type: package_version
+    value: npm:@opengov/form-renderer@0.2.20
+    campaign: null
+    source: threatfox
+    source_ref: "threatfox:1781006"
+    source_url: https://threatfox.abuse.ch/ioc/1781006/
+    notes: Named in the ThreatFox 1781006 reporter note as using the canister as C2.
+
+  - ioc_type: file_path
+    value: /tmp/pglog
+    campaign: null
+    source: threatfox
+    source_ref: "threatfox:1781006"
+    source_url: https://threatfox.abuse.ch/ioc/1781006/
+    notes: Binary payload drop path (ThreatFox 1781006 reporter note).
+
+  - ioc_type: systemd_unit
+    value: pgmon.service
+    campaign: null
+    source: threatfox
+    source_ref: "threatfox:1781006"
+    source_url: https://threatfox.abuse.ch/ioc/1781006/
+    notes: Persistent systemd user service that executed /tmp/pglog (ThreatFox 1781006 reporter note).

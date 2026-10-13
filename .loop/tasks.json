@@ -55,7 +55,7 @@
       "id": "T05",
       "type": "feat",
       "title": "raw store and seed IOC loader",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "raw_store saves bodies verbatim with sha256, fetch time, source and URL; idempotent on identical content; redaction applied before persistence.",
         "data/seed_iocs.yaml contains every SPEC section 3 fact (both canisters, ThreatFox 1781006 fields, @opengov/form-renderer 0.2.20, /tmp/pglog, pgmon.service, campaign dates, source URLs) and nothing invented.",

@@ -8,12 +8,13 @@ from typing import Annotated, NoReturn
 
 import typer
 
+from icp_threat_intel.cli.db import db_app
+
 app = typer.Typer(
     name="icp-threat-intel",
     help="Threat intelligence for ICP canisters used as attack infrastructure.",
     no_args_is_help=True,
 )
-db_app = typer.Typer(help="Database maintenance.", no_args_is_help=True)
 canister_app = typer.Typer(help="Inspect individual canisters.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
 app.add_typer(canister_app, name="canister")
@@ -70,22 +71,6 @@ def digest() -> None:
 def publish() -> None:
     """Export a disclosed case as ThreatFox, STIX 2.1, MISP or Markdown."""
     _not_implemented("publish")
-
-
-@db_app.command("migrate")
-def db_migrate() -> None:
-    """Apply Alembic migrations up to head."""
-    _not_implemented("db migrate")
-
-
-@db_app.command("seed")
-def db_seed(
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Print what would load without writing.")
-    ] = False,
-) -> None:
-    """Load data/seed_iocs.yaml into the database."""
-    _not_implemented("db seed")
 
 
 @canister_app.command("inspect")
