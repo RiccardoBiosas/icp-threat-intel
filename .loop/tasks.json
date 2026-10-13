@@ -18,7 +18,7 @@
       "id": "T02",
       "type": "build",
       "title": "repo skeleton, tooling and CI",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "pyproject.toml (Python 3.12, src layout, package icp_threat_intel, console script icp-threat-intel, pytest markers integration and live registered), uv.lock, Makefile with every target in the SPEC Makefile contract, docker-compose.yml (postgres16 + pgvector + app), Dockerfile, .env.example, LICENSE (Apache-2.0), .github/workflows/ci.yml running lint, typecheck and tests.",
         "Empty stage packages with __init__.py and core/interfaces.py defining the stage protocols from SPEC D1 (names and signatures as in PLAN.md).",
