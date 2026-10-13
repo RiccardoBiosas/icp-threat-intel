@@ -43,7 +43,7 @@
       "id": "T04",
       "type": "feat",
       "title": "data model and initial Alembic migration",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "SQLAlchemy models for every SPEC table; Postgres-only features behind a dialect check so unit tests run on SQLite.",
         "Alembic configured; initial migration creates all tables and the pgvector extension on Postgres.",
