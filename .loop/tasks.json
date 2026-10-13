@@ -1,0 +1,213 @@
+{
+  "project": "icp-threat-intel",
+  "note": "Status changes only through the commit procedure in PROMPT.md section 5, after the task's verify command exits 0. Tasks run in order.",
+  "tasks": [
+    {
+      "id": "T01",
+      "type": "docs",
+      "title": "write PLAN.md",
+      "status": "done",
+      "acceptance": [
+        "PLAN.md exists with sections: ## Architecture, ## Repo layout, ## Data model (every table with column names and types), ## Rule interface, ## Census algorithm, ## Task mapping (each task T02-T18 mapped to modules and tests).",
+        "No application code yet: src/ must not exist.",
+        "Any open decision not covered by SPEC section 2 goes to OPEN_QUESTIONS.md with the default chosen."
+      ],
+      "verify": "test -s PLAN.md && for h in '## Architecture' '## Repo layout' '## Data model' '## Rule interface' '## Census algorithm' '## Task mapping'; do grep -q \"^$h\" PLAN.md || { echo \"missing: $h\"; exit 1; }; done && test ! -e src"
+    },
+    {
+      "id": "T02",
+      "type": "build",
+      "title": "repo skeleton, tooling and CI",
+      "status": "pending",
+      "acceptance": [
+        "pyproject.toml (Python 3.12, src layout, package icp_threat_intel, console script icp-threat-intel, pytest markers integration and live registered), uv.lock, Makefile with every target in the SPEC Makefile contract, docker-compose.yml (postgres16 + pgvector + app), Dockerfile, .env.example, LICENSE (Apache-2.0), .github/workflows/ci.yml running lint, typecheck and tests.",
+        "Empty stage packages with __init__.py and core/interfaces.py defining the stage protocols from SPEC D1 (names and signatures as in PLAN.md).",
+        "A typer CLI whose --help lists every SPEC command (stubs may exit 2 with 'not implemented').",
+        "One smoke test so make test collects at least one test."
+      ],
+      "verify": "make setup >/dev/null && make check && test -f .github/workflows/ci.yml && test -f docker-compose.yml && test -f .env.example && grep -q 'Apache License' LICENSE && uv run icp-threat-intel --help | grep -q census && uv run python -c 'import icp_threat_intel.core.interfaces as i; [getattr(i,n) for n in (\"Collector\",\"RawStore\",\"Parser\",\"Enricher\",\"Rule\",\"Verifier\",\"Notifier\",\"Exporter\")]'"
+    },
+    {
+      "id": "T03",
+      "type": "feat",
+      "title": "guardrails first: allowlist client, query-only IC client, redaction, disclosure gate",
+      "status": "pending",
+      "acceptance": [
+        "Tests written first in tests/guardrails/: test_allowlist.py, test_query_only.py, test_redaction.py, test_disclosure_gate.py, test_bodies_are_data.py, test_rate_limit.py, test_no_upload.py.",
+        "Minimal implementations: shared HTTP client with ALLOWLIST and per-host rate limiting and identifying User-Agent; IC client surface exposing only query and read_state; redaction detector; publish disclosure gate; gateway body handling that never executes or follows off-domain redirects.",
+        "Redaction test samples assembled from fragments at runtime (SPEC guardrail 5)."
+      ],
+      "verify": "for f in test_allowlist test_query_only test_redaction test_disclosure_gate test_bodies_are_data test_rate_limit test_no_upload; do test -s tests/guardrails/$f.py || { echo \"missing $f\"; exit 1; }; done && uv run pytest -q tests/guardrails && make check"
+    },
+    {
+      "id": "T04",
+      "type": "feat",
+      "title": "data model and initial Alembic migration",
+      "status": "pending",
+      "acceptance": [
+        "SQLAlchemy models for every SPEC table; Postgres-only features behind a dialect check so unit tests run on SQLite.",
+        "Alembic configured; initial migration creates all tables and the pgvector extension on Postgres.",
+        "tests/unit/test_models.py covers constraints, the detection status enum and immutability of raw_snapshots and canister_snapshots."
+      ],
+      "verify": "make check && uv run pytest -q tests/unit/test_models.py && ICP_THREAT_INTEL_DATABASE_URL=postgresql+psycopg://u:p@localhost/x uv run alembic upgrade head --sql >/dev/null"
+    },
+    {
+      "id": "T05",
+      "type": "feat",
+      "title": "raw store and seed IOC loader",
+      "status": "pending",
+      "acceptance": [
+        "raw_store saves bodies verbatim with sha256, fetch time, source and URL; idempotent on identical content; redaction applied before persistence.",
+        "data/seed_iocs.yaml contains every SPEC section 3 fact (both canisters, ThreatFox 1781006 fields, @opengov/form-renderer 0.2.20, /tmp/pglog, pgmon.service, campaign dates, source URLs) and nothing invented.",
+        "`icp-threat-intel db seed --dry-run` prints what would load without a database."
+      ],
+      "verify": "make check && uv run pytest -q tests/unit/test_raw_store.py tests/unit/test_seed.py && out=$(uv run icp-threat-intel db seed --dry-run) && for s in tdtqy-oyaaa-aaaae-af2dq-cai cjn37-uyaaa-aaaac-qgnva-cai 1781006 pgmon.service; do echo \"$out\" | grep -q \"$s\" || { echo \"seed missing $s\"; exit 1; }; done"
+    },
+    {
+      "id": "T06",
+      "type": "docs",
+      "title": "source research notes (one subagent per source)",
+      "status": "pending",
+      "acceptance": [
+        "One note per file listed in SPEC section 5 under docs/sources/, researched from current official documentation.",
+        "First line of each note is exactly 'Status: VERIFIED' or 'Status: EXPERIMENTAL'. Each note lists endpoints, auth, rate limits, a sample response and the URLs consulted.",
+        "read-state.md records how the anonymous read_state request is encoded and which library or manual CBOR path will be used; icp-ledger-cmc.md records the top-up subaccount derivation and how it was checked."
+      ],
+      "verify": "for f in dashboard-api read-state raw-gateway icp-ledger-cmc nns-governance npm pypi threatfox urlhaus github-advisories vendor-rss; do test -s docs/sources/$f.md || { echo \"missing $f\"; exit 1; }; head -1 docs/sources/$f.md | grep -qE '^Status: (VERIFIED|EXPERIMENTAL)$' || { echo \"bad status line in $f\"; exit 1; }; grep -q 'http' docs/sources/$f.md || { echo \"no URLs in $f\"; exit 1; }; done"
+    },
+    {
+      "id": "T07",
+      "type": "feat",
+      "title": "read_state collector (module_hash, controllers, candid:service)",
+      "status": "pending",
+      "acceptance": [
+        "Collector built on the query-only IC client, written against docs/sources/read-state.md.",
+        "Cassettes recorded once against both seed canisters via make record (or synthetic per SPEC D6), stored under tests/cassettes/read_state_*.",
+        "Candid service text parsed into a method list with argument and return types and query/update annotation."
+      ],
+      "verify": "make check && uv run pytest -q tests/collectors/test_read_state.py && ls tests/cassettes/read_state_* >/dev/null"
+    },
+    {
+      "id": "T08",
+      "type": "feat",
+      "title": "raw gateway fetcher",
+      "status": "pending",
+      "acceptance": [
+        "Fetches <id>.raw.icp0.io and <id>.raw.ic0.app with 1 MB cap, 10 s timeout, no off-domain redirects; stores the body through raw_store.",
+        "Cassettes for both seed canisters under tests/cassettes/raw_gateway_*; tests cover the size cap, timeout and redirect refusal."
+      ],
+      "verify": "make check && uv run pytest -q tests/collectors/test_raw_gateway.py && ls tests/cassettes/raw_gateway_* >/dev/null"
+    },
+    {
+      "id": "T09",
+      "type": "feat",
+      "title": "Dashboard API canister metadata collector",
+      "status": "pending",
+      "acceptance": [
+        "Client written against docs/sources/dashboard-api.md for canister metadata, subnet membership and controllers.",
+        "Cassettes for both seed canisters under tests/cassettes/dashboard_*."
+      ],
+      "verify": "make check && uv run pytest -q tests/collectors/test_dashboard.py && ls tests/cassettes/dashboard_* >/dev/null"
+    },
+    {
+      "id": "T10",
+      "type": "feat",
+      "title": "parsers to normalized events",
+      "status": "pending",
+      "acceptance": [
+        "Parsers turn raw snapshots from T07-T09 into events and canister_snapshots; re-running over the same snapshots produces identical events.",
+        "Source trust weights applied at ingest."
+      ],
+      "verify": "make check && uv run pytest -q tests/parsers"
+    },
+    {
+      "id": "T11",
+      "type": "feat",
+      "title": "rule H1 dead-drop C2",
+      "status": "pending",
+      "acceptance": [
+        "H1 implemented per SPEC section 4 with tests on synthetic events: positive (setter/getter pair plus URL-like body), and negatives for each signal alone.",
+        "Docstring cites CanisterWorm."
+      ],
+      "verify": "make check && uv run pytest -q tests/rules/test_h1.py"
+    },
+    {
+      "id": "T12",
+      "type": "feat",
+      "title": "rules H2 lifecycle and H3 supply-chain references",
+      "status": "pending",
+      "acceptance": [
+        "H2 and H3 implemented with positive and negative synthetic-event tests; H3 matches the canister-ID regex, gateway hosts and the host indicators /tmp/pglog and pgmon.service.",
+        "Docstrings cite CanisterWorm, ThreatFox 1781006 and CanisterSprawl."
+      ],
+      "verify": "make check && uv run pytest -q tests/rules/test_h2.py tests/rules/test_h3.py"
+    },
+    {
+      "id": "T13",
+      "type": "feat",
+      "title": "rule stubs H4-H6 and rule registry",
+      "status": "pending",
+      "acceptance": [
+        "H4, H5 and H6 classes with documented required_signals; score() returns None and logs that the rule is a stub.",
+        "A REGISTRY mapping rule id to class covers H1-H6."
+      ],
+      "verify": "make check && uv run python -c 'from icp_threat_intel.rules import REGISTRY; assert {\"H1\",\"H2\",\"H3\",\"H4\",\"H5\",\"H6\"} <= set(REGISTRY), sorted(REGISTRY)'"
+    },
+    {
+      "id": "T14",
+      "type": "feat",
+      "title": "verification state machine with two-signal constraint",
+      "status": "pending",
+      "acceptance": [
+        "candidate -> verified only with >= 2 evidence refs from different source types; candidate -> dismissed allowed; verified is terminal except an explicit audited dismissal.",
+        "tests/guardrails/test_two_signal.py proves a single-signal detection and a two-refs-same-source detection cannot be verified."
+      ],
+      "verify": "test -s tests/guardrails/test_two_signal.py && uv run pytest -q tests/guardrails/test_two_signal.py && make check"
+    },
+    {
+      "id": "T15",
+      "type": "feat",
+      "title": "census package and canister inspect command",
+      "status": "pending",
+      "acceptance": [
+        "Census walks subnets via the Dashboard API client, records canister state and diffs against the previous run (added, removed, changed fields).",
+        "`icp-threat-intel canister inspect <id> --offline` prints status, controllers, module hash, Candid methods and a raw-body summary from cassettes or the raw store."
+      ],
+      "verify": "make check && uv run pytest -q tests/unit/test_census.py && out=$(uv run icp-threat-intel canister inspect tdtqy-oyaaa-aaaae-af2dq-cai --offline) && echo \"$out\" | grep -qi 'module' && echo \"$out\" | grep -qi 'controller'"
+    },
+    {
+      "id": "T16",
+      "type": "feat",
+      "title": "exporters (ThreatFox, STIX 2.1, MISP) and daily digest",
+      "status": "pending",
+      "acceptance": [
+        "Exporters produce valid ThreatFox submission JSON, a STIX 2.1 bundle and a MISP event JSON from verified detections and seed IOCs; all refuse cases without disclosed_at.",
+        "Digest writes Markdown and JSON; stdout and webhook notifiers (webhook tested with respx)."
+      ],
+      "verify": "make check && uv run pytest -q tests/exporters"
+    },
+    {
+      "id": "T17",
+      "type": "docs",
+      "title": "CLAUDE.md, README.md and docs/ARCHITECTURE.md",
+      "status": "pending",
+      "acceptance": [
+        "CLAUDE.md records conventions, every make target, the guardrails, the read-docs-before-clients rule and the stage contract (D1 protocol names, signatures and pipeline order).",
+        "README.md has a 10-minute quickstart using docker compose and make bootstrap, plus a section stating decoys or live probing are out of scope.",
+        "docs/ARCHITECTURE.md has a mermaid pipeline diagram and a section titled exactly 'What the IC does not let us see' explaining how each rule works around the module-bytes limit."
+      ],
+      "verify": "test -s CLAUDE.md && test -s README.md && grep -q '```mermaid' docs/ARCHITECTURE.md && grep -q 'What the IC does not let us see' docs/ARCHITECTURE.md && grep -qi 'quickstart' README.md && grep -qi 'stage contract' CLAUDE.md"
+    },
+    {
+      "id": "T18",
+      "type": "test",
+      "title": "final gate: coverage and full check",
+      "status": "pending",
+      "acceptance": [
+        "make coverage passes at 80% or more on rules, verification, raw_store and the IC client, by adding tests rather than excluding code.",
+        "make check passes; OPEN_QUESTIONS.md lists every unresolved decision; NOTES.md ends with a summary of what a human should review first."
+      ],
+      "verify": "make check && make coverage && test -s OPEN_QUESTIONS.md"
+    }
+  ]
+}

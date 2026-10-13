@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(uv *)",
+      "Bash(make *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "WebFetch(domain:internetcomputer.org)",
+      "WebFetch(domain:*.internetcomputer.org)",
+      "WebFetch(domain:docs.npmjs.com)",
+      "WebFetch(domain:warehouse.pypa.io)",
+      "WebFetch(domain:docs.pypi.org)",
+      "WebFetch(domain:threatfox.abuse.ch)",
+      "WebFetch(domain:urlhaus.abuse.ch)",
+      "WebFetch(domain:docs.github.com)",
+      "WebFetch(domain:docs.oasis-open.org)",
+      "WebFetch(domain:www.misp-project.org)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ],
+    "deny": [
+      "Edit(/SPEC.md)",
+      "Edit(/PROMPT.md)",
+      "Edit(/LOOP.md)",
+      "Edit(/.loop/**)",
+      "Edit(/.claude/**)",
+      "Edit(/.git/**)",
+      "Read(/.env)",
+      "Bash(git push *)",
+      "Bash(git reset *)",
+      "Bash(git restore *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git stash *)",
+      "Bash(git rebase *)",
+      "Bash(git clean *)",
+      "Bash(git config *)",
+      "Bash(sudo *)",
+      "Bash(dfx *)",
+      "Bash(icp *)",
+      "Bash(npm publish *)",
+      "Bash(uv publish *)",
+      "Bash(twine *)",
+      "Bash(git commit --amend *)",
+      "Bash(git commit --no-verify *)"
+    ]
+  },
+  "env": {
+    "ICP_THREAT_INTEL_LOOP": "1"
+  }
+}
