@@ -31,7 +31,7 @@
       "id": "T03",
       "type": "feat",
       "title": "guardrails first: allowlist client, query-only IC client, redaction, disclosure gate",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "Tests written first in tests/guardrails/: test_allowlist.py, test_query_only.py, test_redaction.py, test_disclosure_gate.py, test_bodies_are_data.py, test_rate_limit.py, test_no_upload.py.",
         "Minimal implementations: shared HTTP client with ALLOWLIST and per-host rate limiting and identifying User-Agent; IC client surface exposing only query and read_state; redaction detector; publish disclosure gate; gateway body handling that never executes or follows off-domain redirects.",

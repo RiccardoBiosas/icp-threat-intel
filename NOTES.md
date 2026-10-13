@@ -19,3 +19,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T02 verify command, exit 0; make check: ruff, mypy --strict, 14 tests)
 - Decisions: hatchling build backend; dev tools in [dependency-groups] dev (uv sync installs them). ruff `include` is Python-only because ruff 0.17 also formats code blocks in Markdown and rewrote PLAN.md (reverted). `make run` = `python -m icp_threat_intel.scheduler` (SPEC lists no `run` CLI command). LICENSE copied from the canonical Apache-2.0 text (sha256 cfc7749b...).
 - Follow-ups: tests/conftest.py socket block and core/config.py land with T03; docker-compose requires POSTGRES_PASSWORD from .env
+
+## 2026-10-13T23:11:34Z T03 attempt 1
+- Changed: tests/guardrails/{7 tests, _support.py}, tests/conftest.py (socket block), tests/unit/test_ic_encoding.py, tests/__init__.py files; core/{http,ratelimit,bodies,ic_encoding,ic_client,redaction,config}.py, publishing/gate.py, collectors/registry_common.py
+- Verify: pass (T03 verify command, exit 0; 125 guardrail tests, 147 total)
+- Decisions: new dep `mnemonic` (BIP-39 wordlist for seed-phrase redaction; typed). cbor2 decodes tag 55799 to a frozendict, so check Mapping, not dict. ruff ignores N818 (PLAN exception names). ALLOWLIST is IC-only until collectors add verified hosts. Guardrail tests also scan src statically: only core/http.py imports httpx, no eval/exec/subprocess, upload/submit functions need kw-only allow_upload=False, no update-call endpoint string.
+- Follow-ups: T07 must verify read_state certificates (client returns raw cert bytes); collectors add their hosts to ALLOWLIST; webhook notifier uses SafeHttpClient(extra_hosts=...)
