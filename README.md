@@ -219,7 +219,7 @@ make check                                  # cassette tests may need updating f
 | `parse` | works: turns stored raw snapshots into events and canister snapshots (trust weights and IOC flags applied at ingest); safe to re-run |
 | `enrich` | works: re-applies IOC membership to stored events after IOCs change (e.g. a re-seed) |
 | `score` | works: runs rules H1-H7 over stored events and records **candidate** detections; one per rule and canister, later evidence is merged into it |
-| `collect signals [--feed NAME] [--pages N] [--no-parse]` | works: polls community forums (the signals feed, low authority, `docs/sources/signals-feed.md`) into the raw store and parses them; run by hand, no scheduler job. Needs `ICP_THREAT_INTEL_CONTACT` and migration 0002 (`make migrate`) |
+| `collect signals [--feed NAME] [--pages N] [--backfill] [--since YYYY-MM-DD] [--search] [--search-pages N] [--max-topics N] [--no-parse]` | works: `--backfill` walks up to 200 pages of history, `--search` searches curated generic threat terms (never IOC values) and fetches the matching topics; polls community forums (the signals feed, low authority, `docs/sources/signals-feed.md`) into the raw store and parses them; run by hand, no scheduler job. Needs `ICP_THREAT_INTEL_CONTACT` and migration 0002 (`make migrate`) |
 | bare `collect`, `db migrate` | not wired yet (exit 2). Use `collect signals`, `canister inspect` or `census` to collect, and `make migrate` for migrations. |
 
 `make run` starts the scheduler with the default cadences (IOC state hourly, raw gateway

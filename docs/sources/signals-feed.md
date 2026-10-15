@@ -30,16 +30,33 @@ before its entry is added.
 |---|---|---|---|
 | `dfinity-forum` | `GET https://forum.dfinity.org/posts.json` | 200, `application/json`, 50 posts, header `x-discourse-route: posts/latest` | 2026-10-15 |
 | `dfinity-forum` | `GET https://forum.dfinity.org/posts.json?before=<post id>` | 200, the 50 posts with ids below `<post id>` | 2026-10-15 |
+| `dfinity-forum` | `GET https://forum.dfinity.org/search.json?q=<term> order:latest&page=N` | 200, up to 50 hits (one per topic: `posts[].id/topic_id/post_number`, a short `blurb`), `grouped_search_result.more_full_page_results`; `phishing` returned 34 topics from 2020 to 2026 | 2026-10-15 |
+| `dfinity-forum` | `GET https://forum.dfinity.org/t/<id>.json?include_raw=true` | 200, topic `title`/`slug`/`category_id`, `post_stream.posts` (first 20, with `raw`), `post_stream.stream` (every post id) | 2026-10-15 |
+| `dfinity-forum` | `GET https://forum.dfinity.org/t/<id>/posts.json?post_ids[]=..&include_raw=true` | 200, `post_stream.posts` with `raw` for the given ids (no topic title) | 2026-10-15 |
 
 Also checked and **not used**:
 
 - `/latest.json` (topic list, no post text) and `/categories.json` (anonymous view lists the
   Developers category and its subcategories; other categories may be hidden from
   anonymous users);
-- `/search.json?q=...`: works, but the forum **logs every search** (its response carries a
-  `search_log_id`) and returns only a short `blurb`. Searching for canister ids or
-  unpublished IOC values would tell the forum operator what is tracked, so the collector
-  never searches. It polls the generic latest-posts list and matches locally.
+
+## Search (`collect signals --search`)
+
+The forum **logs every search** (its response carries a `search_log_id`). Searching for
+canister ids or unpublished IOC values would tell the forum operator what is tracked, so:
+
+- only the curated generic threat terms in `parsers/signals_keywords.SEARCH_TERMS` are sent
+  (e.g. `phishing`, `drainer`, `malicious canister`, campaign names from public reporting);
+- every term passes `check_search_term`: lowercase letters, spaces and hyphens only, no
+  principal-shaped or hex token, no IOC value from the `iocs` table
+  (`tests/guardrails/test_signals_search_terms.py`); there is no free-text search option;
+- searches are 5 s apart (anonymous search limits); 429s back off in the shared client.
+
+Search pages are stored as evidence (`signal.search_polled`), but blurbs are truncated, so
+posts are taken from the topics: `/t/<id>.json?include_raw=true` once per topic (first 20
+posts) and `/t/<id>/posts.json?post_ids[]=...` for hit posts beyond them. Default: 1 result
+page per term (`--search-pages`, up to 5) and 50 topics per run (`--max-topics`, up to 500).
+A full run is about 25 searches (about 2 minutes) plus one request per topic.
 
 ## Auth
 
@@ -51,7 +68,9 @@ visitor sees.
 No limit is documented for this forum, and no rate-limit headers were returned on
 2026-10-15 (`cache-control: no-cache, no-store`). The shared client's default applies
 (2 requests/second per host, burst 4, backoff on 429/5xx, `Retry-After` honoured). One poll
-is 1 request per page; the default is 1 page and at most 10 (`MAX_PAGES`). The forum gets
+is 1 request per page; the default is 1 page and at most 10 (`MAX_PAGES`), or 200 with
+`--backfill` (`MAX_BACKFILL_PAGES`, about 10,000 posts, back to early 2026 at the current
+rate of about 28 posts a day); `--since YYYY-MM-DD` stops the walk earlier. The forum gets
 about 50 posts in a day or two, so one page per poll every few hours keeps up.
 
 ## Sample response

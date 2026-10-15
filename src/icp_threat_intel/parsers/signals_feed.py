@@ -2,6 +2,10 @@
 
 * every page gives ``signal.feed_polled`` (subject: the feed) with a parse status and the
   post-id range, so a failed poll is evidence rather than a silent gap;
+* a search page (``request = search``) gives only ``signal.search_polled`` (subject
+  ``<feed>:<term>``; hit and topic counts); posts come from the topic pages it led to;
+* latest-posts, topic and topic-posts pages are parsed alike, so a post seen both ways
+  keeps one subject;
 * a post that names a canister id, a threat keyword or an IOC term gives
   ``signal.post_observed`` (subject ``<feed>:<post id>``); other posts give nothing. A post
   naming an IOC term is ``is_ioc``;
@@ -20,7 +24,12 @@ from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlsplit
 
-from icp_threat_intel.collectors.signals_feed import ForumPost, extract_posts
+from icp_threat_intel.collectors.signals_feed import (
+    ForumPost,
+    extract_posts,
+    extract_topic_posts,
+)
+from icp_threat_intel.collectors.signals_search import extract_search_hits
 from icp_threat_intel.core.enums import SourceType
 from icp_threat_intel.core.models import Event, ParseResult, RawSnapshot
 from icp_threat_intel.enrichment.ioc_join import CANISTER_ID_RE
@@ -28,6 +37,7 @@ from icp_threat_intel.parsers.base import canister_event
 from icp_threat_intel.parsers.signals_keywords import IocTerm, find_ioc_terms, keywords_in
 
 PARSER_NAME = "signals_feed"
+_TOPIC_REQUESTS = frozenset({"topic", "topic_posts"})
 EXCERPT_CHARS = 280
 IC_HOST_RE = re.compile(r"\b(?:[a-z0-9-]+\.)*(?:icp0\.io|ic0\.app|icp-api\.io)\b", re.IGNORECASE)
 
@@ -74,15 +84,25 @@ class SignalsFeedParser:
         )
 
     def parse(self, snapshot: RawSnapshot) -> ParseResult:
-        feed = str(snapshot.request_meta.get("feed") or snapshot.source_name)
+        meta = snapshot.request_meta
+        feed = str(meta.get("feed") or snapshot.source_name)
+        request = str(meta.get("request") or "latest_posts")
+        if request == "search":
+            return ParseResult(events=(self._search_event(snapshot, feed),))
         polled: dict[str, Any] = {"http_status": snapshot.http_status, "feed": feed}
+        if request in _TOPIC_REQUESTS:
+            polled["request"] = request
         subject = ("signal_feed", feed)
         if snapshot.http_status != 200:
             event = self._event(
                 snapshot, "signal.feed_polled", subject, {**polled, "status": "error"}
             )
             return ParseResult(events=(event,))
-        posts = extract_posts(snapshot.body)
+        if request in _TOPIC_REQUESTS:
+            topic = {k: meta.get(k) for k in ("topic_title", "topic_slug", "category_id")}
+            posts = extract_topic_posts(snapshot.body, topic)
+        else:
+            posts = extract_posts(snapshot.body)
         if posts is None:
             payload = {**polled, "status": "unusable_body"}
             return ParseResult(
@@ -107,6 +127,29 @@ class SignalsFeedParser:
         }
         first = self._event(snapshot, "signal.feed_polled", subject, summary)
         return ParseResult(events=(first, *post_events))
+
+    def _search_event(self, snapshot: RawSnapshot, feed: str) -> Event:
+        """A search page: what was asked and how much came back; posts come from topics."""
+        term = str(snapshot.request_meta.get("term"))
+        payload: dict[str, Any] = {
+            "http_status": snapshot.http_status,
+            "feed": feed,
+            "term": term,
+            "page": snapshot.request_meta.get("page"),
+        }
+        hits = extract_search_hits(snapshot.body) if snapshot.http_status == 200 else None
+        if snapshot.http_status != 200:
+            payload["status"] = "error"
+        elif hits is None:
+            payload["status"] = "unusable_body"
+        else:
+            payload |= {
+                "status": "ok",
+                "hits": len(hits),
+                "topics": len({h.topic_id for h in hits}),
+            }
+        subject = ("signal_search", f"{feed}:{term}")
+        return self._event(snapshot, "signal.search_polled", subject, payload)
 
     def _post_events(
         self, snapshot: RawSnapshot, feed: str, origin: str, post: ForumPost

@@ -185,3 +185,29 @@ def test_fetches_land_in_the_raw_store_with_signal_weight(engine: Engine) -> Non
     assert source is not None
     assert source.source_type is SourceType.SIGNALS_FEED
     assert source.reliability == default_reliability(SourceType.SIGNALS_FEED)
+
+
+def test_backfill_allows_more_pages() -> None:
+    from icp_threat_intel.collectors.signals_feed import MAX_BACKFILL_PAGES
+
+    with pytest.raises(ValueError, match="--backfill"):
+        _collector(Replay(), pages=MAX_PAGES + 1)
+    collector = SignalsFeedCollector(
+        _http(Replay()), pages=MAX_BACKFILL_PAGES, backfill=True, clock=lambda: T0
+    )
+    assert len(list(collector.collect([]))) == 3  # still stops at the empty page
+    with pytest.raises(ValueError):
+        SignalsFeedCollector(_http(Replay()), pages=MAX_BACKFILL_PAGES + 1, backfill=True)
+
+
+def test_since_stops_the_walk_once_posts_are_older() -> None:
+    since = datetime(2026, 10, 15, 6, 0, tzinfo=UTC)  # page 1 posts are from 05:00
+    collector = SignalsFeedCollector(_http(Replay()), pages=5, since=since, clock=lambda: T0)
+    fetches = list(collector.collect([]))
+    assert [f.request_meta["page"] for f in fetches] == [1]
+
+
+def test_since_keeps_walking_while_posts_are_newer() -> None:
+    since = datetime(2026, 10, 15, 4, 0, tzinfo=UTC)
+    collector = SignalsFeedCollector(_http(Replay()), pages=5, since=since, clock=lambda: T0)
+    assert len(list(collector.collect([]))) == 3

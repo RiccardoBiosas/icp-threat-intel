@@ -94,3 +94,64 @@ def _term_re(term: str) -> re.Pattern[str]:
 def find_ioc_terms(text: str, terms: Iterable[IocTerm]) -> list[str]:
     """Sorted IOC terms that appear in ``text`` as whole terms."""
     return sorted({t.term for t in terms if _term_re(t.term).search(text)})
+
+
+# Forum search (``collectors/signals_search.py``). Discourse logs every query, so only these
+# generic threat terms are ever sent: words a curious reader would type, never an identifier
+# or anything from the ``iocs`` table. Campaign names are public reporting, not IOC values.
+SEARCH_TERMS: tuple[str, ...] = (
+    "malicious canister",
+    "malware",
+    "phishing",
+    "scam",
+    "scammer",
+    "drainer",
+    "exploit",
+    "backdoor",
+    "hacked",
+    "compromised",
+    "stolen",
+    "exfiltration",
+    "denylist",
+    "takedown",
+    "supply chain attack",
+    "dead drop",
+    "rug pull",
+    "impersonating",
+    "fake airdrop",
+    "infostealer",
+    "command and control",
+    "canisterworm",
+    "canistersprawl",
+    "teampcp",
+    "shai-hulud",
+)
+MAX_SEARCH_TERM_CHARS = 60
+_SEARCH_TERM_SHAPE = re.compile(r"^[a-z][a-z -]*[a-z]$")
+_PRINCIPAL_SHAPE = re.compile(r"\b[a-z2-7]{5}(?:-[a-z2-7]{1,5})+\b")
+_HEX_RUN = re.compile(r"[0-9a-f]{16,}")
+_TOKEN = re.compile(r"[a-z0-9]+")
+
+
+class UnsafeSearchTerm(ValueError):
+    """A search term that could reveal an identifier or a tracked IOC value."""
+
+
+def check_search_term(term: str, ioc_values: Iterable[str] = ()) -> str:
+    """Return ``term`` if it is safe to send to a forum search, else raise ``UnsafeSearchTerm``.
+
+    Safe means: lowercase letters, spaces and hyphens only (no digits, dots, slashes or
+    ``@``, so no ids, hashes, URLs, domains, paths, packages or units), no principal-shaped
+    or long hex token, and no IOC value or IOC value token (4+ characters) inside it.
+    """
+    if not 0 < len(term) <= MAX_SEARCH_TERM_CHARS or not _SEARCH_TERM_SHAPE.match(term):
+        raise UnsafeSearchTerm(f"search term must be lowercase words: {term!r}")
+    if _PRINCIPAL_SHAPE.search(term) or _HEX_RUN.search(term):
+        raise UnsafeSearchTerm(f"search term looks like an identifier: {term!r}")
+    words = set(_TOKEN.findall(term))
+    for value in ioc_values:
+        value = value.strip().lower()
+        tokens = {t for t in _TOKEN.findall(value) if len(t) >= MIN_TERM_CHARS}
+        if (len(value) >= MIN_TERM_CHARS and value in term) or tokens & words:
+            raise UnsafeSearchTerm(f"search term contains an IOC value: {term!r}")
+    return term
