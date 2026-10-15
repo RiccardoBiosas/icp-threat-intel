@@ -55,23 +55,34 @@ def publish(
     typer.echo(f"wrote {fmt.value} export of case {case.case_id} to {out}")
 
 
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
 def digest(
     out_dir: Annotated[Path, typer.Option("--out", help="Directory for .md and .json.")] = Path(
         "digests"
     ),
     hours: Annotated[int, typer.Option("--hours", help="Look-back window.", min=1)] = 24,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Replace a digest file that already exists.")
+    ] = False,
 ) -> None:
-    """Build the daily digest (Markdown and JSON) from detections in the database."""
+    """Build the digest (Markdown and JSON) from detections in the database.
+
+    Files are named after the period end in UTC, to the second, and existing files are
+    never replaced unless ``--overwrite`` is given.
+    """
     from sqlalchemy import select
 
-    from icp_threat_intel.alerting.digest import build_digest, write_digest
+    from icp_threat_intel.alerting.digest import DigestExists, build_digest, write_digest
     from icp_threat_intel.alerting.signals import recent_signals
     from icp_threat_intel.alerting.watch import latest_census, watched_canisters
     from icp_threat_intel.db.models import DetectionRow
     from icp_threat_intel.db.session import make_engine, make_session_factory
     from icp_threat_intel.verification.store import to_model
 
-    end = datetime.now(UTC)
+    end = _now()
     start = end - timedelta(hours=hours)
     with make_session_factory(make_engine())() as session:
         rows = session.scalars(select(DetectionRow).where(DetectionRow.updated_at >= start))
@@ -86,5 +97,9 @@ def digest(
         census=census,
         signals=signals,
     )
-    md, js = write_digest(report, out_dir)
+    try:
+        md, js = write_digest(report, out_dir, overwrite=overwrite)
+    except DigestExists as exc:
+        typer.echo(f"{exc}; nothing written (use --overwrite to replace it)", err=True)
+        raise typer.Exit(code=1) from None
     typer.echo(f"digest: {len(detections)} detection(s), {len(signals)} signal(s) -> {md}, {js}")

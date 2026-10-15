@@ -17,7 +17,9 @@
 #   --signals-only    only the signals feed: back up + migrate the DB, poll and parse the
 #                     forum, write the digest (no deps, checks, seed, inspect or scoring)
 #   --pages N         forum pages for --signals (1-10, default 1)
-#   --digest-dir DIR  where the digest goes (default local-docs/digests)
+#   --digest-dir DIR  where the digest goes (default local-docs/digests); files are named
+#                     icp-threat-intel_digest_<UTC YYYY-MM-DDTHHMMSSZ>.md/.json and an
+#                     existing digest is never overwritten
 #   -h, --help        show this help
 
 set -euo pipefail
@@ -179,7 +181,7 @@ if [[ $ONLY_SIGNALS -eq 0 ]]; then
   uv run icp-threat-intel score
 fi
 
-step "Digest ($DIGEST_DIR)"
+step "Digest ($DIGEST_DIR, new timestamped files; existing digests are kept)"
 uv run icp-threat-intel digest --out "$DIGEST_DIR"
 
 step "Done"

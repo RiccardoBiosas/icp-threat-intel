@@ -114,13 +114,47 @@ def build_digest(
     return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)
 
 
-def write_digest(digest: Notification, out_dir: Path) -> tuple[Path, Path]:
-    """Write ``<title>.md`` and ``<title>.json``; returns both paths."""
+class DigestExists(FileExistsError):
+    """A digest file with this name is already on disk and ``overwrite`` was not set."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(f"digest exists: {path}")
+        self.path = path
+
+
+def digest_stem(digest: Notification) -> str:
+    """``icp-threat-intel_digest_<period end, UTC, to the second>``, e.g. ``...T160652Z``."""
+    end = datetime.fromisoformat(str(digest.data["period_end"])).astimezone(UTC)
+    return f"icp-threat-intel_digest_{end:%Y-%m-%dT%H%M%SZ}"
+
+
+def write_digest(
+    digest: Notification, out_dir: Path, *, overwrite: bool = False
+) -> tuple[Path, Path]:
+    """Write ``<stem>.md`` and ``<stem>.json``; returns both paths.
+
+    Existing files are never replaced unless ``overwrite`` is true: if either file exists,
+    ``DigestExists`` is raised before anything is written. Files are created exclusively,
+    so a file appearing between the check and the write is not clobbered either.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = digest.title.replace(" ", "_")
+    stem = digest_stem(digest)
     md, js = out_dir / f"{stem}.md", out_dir / f"{stem}.json"
-    md.write_text(digest.markdown, encoding="utf-8")
-    js.write_text(json.dumps(digest.data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if not overwrite:
+        for path in (md, js):
+            if path.exists():
+                raise DigestExists(path)
+    mode = "w" if overwrite else "x"
+    contents = (
+        (md, digest.markdown),
+        (js, json.dumps(digest.data, indent=2, sort_keys=True) + "\n"),
+    )
+    for path, text in contents:
+        try:
+            with path.open(mode, encoding="utf-8") as handle:
+                handle.write(text)
+        except FileExistsError:
+            raise DigestExists(path) from None
     return md, js
 
 

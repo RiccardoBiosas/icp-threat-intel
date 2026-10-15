@@ -215,7 +215,7 @@ make check                                  # cassette tests may need updating f
 | `census [--ceiling N]` | works: Dashboard API walk, diff against the previous run, events |
 | `verify <id> --to verified\|dismissed --actor ... --reason ...` | works: two-signal state machine |
 | `publish --case case.json --format threatfox\|stix\|misp\|markdown --out FILE` | works: refuses cases without `disclosed_at`; writes a local file only |
-| `digest [--out DIR] [--hours N]` | works: Markdown + JSON with detections, watched IOC canisters (changed or unchanged since the previous observation), the latest census and recent low-authority signals (forum posts naming a threat keyword or an IOC canister) |
+| `digest [--out DIR] [--hours N] [--overwrite]` | works: writes `icp-threat-intel_digest_<UTC YYYY-MM-DDTHHMMSSZ>.md` and `.json`, never replacing an existing file unless `--overwrite`; Markdown + JSON with detections, watched IOC canisters (changed or unchanged since the previous observation), the latest census and recent low-authority signals (forum posts naming a threat keyword or an IOC canister) |
 | `parse` | works: turns stored raw snapshots into events and canister snapshots (trust weights and IOC flags applied at ingest); safe to re-run |
 | `enrich` | works: re-applies IOC membership to stored events after IOCs change (e.g. a re-seed) |
 | `score` | works: runs rules H1-H7 over stored events and records **candidate** detections; one per rule and canister, later evidence is merged into it |
