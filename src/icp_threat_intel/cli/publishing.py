@@ -67,8 +67,15 @@ def digest(
     overwrite: Annotated[
         bool, typer.Option("--overwrite", help="Replace a digest file that already exists.")
     ] = False,
+    signals_only: Annotated[
+        bool,
+        typer.Option("--signals-only", help="Only the signals feed (community forum posts)."),
+    ] = False,
 ) -> None:
     """Build the digest (Markdown and JSON) from detections in the database.
+
+    ``--signals-only`` writes a separate signals digest (``icp-threat-intel_signals_digest_*``)
+    with just the community forum posts.
 
     Files are named after the period end in UTC, to the second, and existing files are
     never replaced unless ``--overwrite`` is given.
@@ -76,7 +83,7 @@ def digest(
     from sqlalchemy import select
 
     from icp_threat_intel.alerting.digest import DigestExists, build_digest, write_digest
-    from icp_threat_intel.alerting.signals import recent_signals
+    from icp_threat_intel.alerting.signals import build_signals_digest, recent_signals
     from icp_threat_intel.alerting.watch import latest_census, watched_canisters
     from icp_threat_intel.db.models import DetectionRow
     from icp_threat_intel.db.session import make_engine, make_session_factory
@@ -85,21 +92,31 @@ def digest(
     end = _now()
     start = end - timedelta(hours=hours)
     with make_session_factory(make_engine())() as session:
-        rows = session.scalars(select(DetectionRow).where(DetectionRow.updated_at >= start))
-        detections = [to_model(r) for r in rows]
-        watched, census = watched_canisters(session), latest_census(session)
         signals = recent_signals(session, start)
-    report = build_digest(
-        detections,
-        period_start=start,
-        period_end=end,
-        watched=watched,
-        census=census,
-        signals=signals,
-    )
+        if signals_only:
+            detections, report = (
+                [],
+                build_signals_digest(signals, period_start=start, period_end=end),
+            )
+        else:
+            rows = session.scalars(select(DetectionRow).where(DetectionRow.updated_at >= start))
+            detections = [to_model(r) for r in rows]
+            report = build_digest(
+                detections,
+                period_start=start,
+                period_end=end,
+                watched=watched_canisters(session),
+                census=latest_census(session),
+                signals=signals,
+            )
     try:
         md, js = write_digest(report, out_dir, overwrite=overwrite)
     except DigestExists as exc:
         typer.echo(f"{exc}; nothing written (use --overwrite to replace it)", err=True)
         raise typer.Exit(code=1) from None
-    typer.echo(f"digest: {len(detections)} detection(s), {len(signals)} signal(s) -> {md}, {js}")
+    if signals_only:
+        typer.echo(f"signals digest: {len(signals)} signal(s) -> {md}, {js}")
+    else:
+        typer.echo(
+            f"digest: {len(detections)} detection(s), {len(signals)} signal(s) -> {md}, {js}"
+        )

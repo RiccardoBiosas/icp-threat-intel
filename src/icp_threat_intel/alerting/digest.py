@@ -123,9 +123,14 @@ class DigestExists(FileExistsError):
 
 
 def digest_stem(digest: Notification) -> str:
-    """``icp-threat-intel_digest_<period end, UTC, to the second>``, e.g. ``...T160652Z``."""
+    """``<title without its date>_<period end, UTC, to the second>``.
+
+    ``icp-threat-intel_digest_2026-10-15T160652Z`` for the full digest,
+    ``icp-threat-intel_signals_digest_...`` for ``digest --signals-only``.
+    """
     end = datetime.fromisoformat(str(digest.data["period_end"])).astimezone(UTC)
-    return f"icp-threat-intel_digest_{end:%Y-%m-%dT%H%M%SZ}"
+    prefix = "_".join(digest.title.split()[:-1])
+    return f"{prefix}_{end:%Y-%m-%dT%H%M%SZ}"
 
 
 def write_digest(

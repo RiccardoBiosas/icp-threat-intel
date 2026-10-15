@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from icp_threat_intel.core.models import Notification
 from icp_threat_intel.db.models import EventRow
 from icp_threat_intel.parsers.ingest import ioc_canisters
 
@@ -108,3 +109,25 @@ def signals_section(posts: Sequence[SignalPost]) -> list[str]:
             f"{'staff' if p.author_staff else 'member'} | `{_code(p.url or '-')}` |"
         )
     return lines
+
+
+def build_signals_digest(
+    posts: Sequence[SignalPost], *, period_start: datetime, period_end: datetime
+) -> Notification:
+    """A digest with only the signals feed (``digest --signals-only``)."""
+    title = f"icp-threat-intel signals digest {period_end.date().isoformat()}"
+    lines = [
+        f"# {title}",
+        "",
+        f"Period: {period_start.isoformat()} to {period_end.isoformat()}",
+        "",
+        f"Signals: {len(posts)} matched post(s)" if posts else "Signals: none",
+    ]
+    if posts:
+        lines += signals_section(posts)
+    data = {
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "signals": [p.to_dict() for p in posts],
+    }
+    return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)
