@@ -17,8 +17,8 @@ EXPECTED_SIGNALS = {
 }
 
 
-def test_registry_covers_h1_to_h6() -> None:
-    assert set(REGISTRY) == {"H1", "H2", "H3", "H4", "H5", "H6"}
+def test_registry_covers_h1_to_h7() -> None:
+    assert set(REGISTRY) == {"H1", "H2", "H3", "H4", "H5", "H6", "H7"}
     for rule_id, cls in REGISTRY.items():
         assert cls.id == rule_id
         assert isinstance(cls(), Rule)
@@ -45,4 +45,4 @@ def test_h6_is_labelled_unverified() -> None:
 
 
 def test_real_rules_are_not_stubs() -> None:
-    assert not any(isinstance(REGISTRY[r](), StubRule) for r in ("H1", "H2", "H3"))
+    assert not any(isinstance(REGISTRY[r](), StubRule) for r in ("H1", "H2", "H3", "H7"))

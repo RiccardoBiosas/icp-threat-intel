@@ -3,9 +3,10 @@
 import json
 from collections import Counter
 from collections.abc import Iterable, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
+from icp_threat_intel.alerting.watch import CensusSummary, WatchedCanister
 from icp_threat_intel.core.enums import DetectionStatus
 from icp_threat_intel.core.interfaces import Notifier
 from icp_threat_intel.core.models import Detection, Notification
@@ -21,8 +22,57 @@ def _row(d: Detection) -> str:
     )
 
 
+def _ts(value: datetime | None) -> str:
+    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%MZ") if value else "-"
+
+
+def _watched_section(watched: Sequence[WatchedCanister]) -> list[str]:
+    lines = ["", "## Watched canisters", "",
+             "IOC canisters, latest observation, and change since the previous observation.", "",
+             "| Canister | Last observed | Module hash | Controllers | Gateway | Since previous |",
+             "|---|---|---|---|---|---|"]  # fmt: skip
+    for w in watched:
+        if w.last_observed is None:
+            lines.append(f"| `{w.canister_id}` | never observed | - | - | - | - |")
+            continue
+        module = f"`{w.module_hash[:8]}…`" if w.module_hash else "unknown"
+        controllers = str(len(w.controllers)) if w.controllers is not None else "unknown"
+        gateway = f"{w.gateway} (since {_ts(w.gateway_since)})" if w.gateway_since else w.gateway
+        if w.changes:
+            since = f"**CHANGED: {', '.join(w.changes)}**"
+        else:
+            since = "unchanged" if w.observations > 1 else "first observation"
+        lines.append(
+            f"| `{w.canister_id}` | {_ts(w.last_observed)} | {module} | {controllers} | "
+            f"{gateway} | {since} |"
+        )
+    return lines
+
+
+def _census_section(c: CensusSummary) -> list[str]:
+    total = c.complete_subnets + c.incomplete_subnets
+    lines = [
+        "", "## Census", "",
+        f"Latest run `{c.run_id}` at {_ts(c.observed_at)}: {c.canisters} canisters, "
+        f"+{c.added} added, -{c.removed} removed, ~{c.changed} changed; "
+        f"{c.complete_subnets} of {total} subnets walked completely"
+        + ("; **ceiling hit**." if c.ceiling_hit else "."),
+    ]  # fmt: skip
+    if c.incomplete_subnets:
+        lines.append(
+            "Removals are only reported for subnets walked completely in two runs, so this "
+            "run is a sample."
+        )
+    return lines
+
+
 def build_digest(
-    detections: Sequence[Detection], *, period_start: datetime, period_end: datetime
+    detections: Sequence[Detection],
+    *,
+    period_start: datetime,
+    period_end: datetime,
+    watched: Sequence[WatchedCanister] = (),
+    census: CensusSummary | None = None,
 ) -> Notification:
     ordered = sorted(
         detections,
@@ -30,7 +80,7 @@ def build_digest(
     )
     by_status = Counter(d.status.value for d in ordered)
     by_rule = Counter(d.rule_id for d in ordered)
-    title = f"icp-threat-intel digest {period_start.date().isoformat()}"
+    title = f"icp-threat-intel digest {period_end.date().isoformat()}"
     lines = [
         f"# {title}",
         "",
@@ -41,6 +91,10 @@ def build_digest(
     if ordered:
         lines += ["", "| Status | Rule | Subject | Score | Confidence | Signals |",
                   "|---|---|---|---|---|---|", *(_row(d) for d in ordered)]  # fmt: skip
+    if watched:
+        lines += _watched_section(watched)
+    if census is not None:
+        lines += _census_section(census)
     data = {
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
@@ -49,6 +103,8 @@ def build_digest(
             "by_rule": dict(sorted(by_rule.items())),
         },
         "detections": [d.model_dump(mode="json") for d in ordered],
+        "watched": [w.to_dict() for w in watched],
+        "census": census.to_dict() if census is not None else None,
     }
     return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)
 

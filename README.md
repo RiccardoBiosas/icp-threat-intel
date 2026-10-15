@@ -49,7 +49,7 @@ uv run icp-threat-intel canister inspect <canister-id>            # any canister
 uv run icp-threat-intel canister inspect <canister-id> --offline  # raw store or cassettes, no network
 uv run icp-threat-intel census --ceiling 500                       # bounded census walk + diff
 uv run icp-threat-intel parse                                      # raw snapshots -> events
-uv run icp-threat-intel score                                      # rules H1-H6 -> candidate detections
+uv run icp-threat-intel score                                      # rules H1-H7 -> candidate detections
 uv run icp-threat-intel digest --out digests                       # daily digest (.md + .json)
 docker compose up -d app                                           # scheduler (make run in a container)
 ```
@@ -214,10 +214,10 @@ make check                                  # cassette tests may need updating f
 | `census [--ceiling N]` | works: Dashboard API walk, diff against the previous run, events |
 | `verify <id> --to verified\|dismissed --actor ... --reason ...` | works: two-signal state machine |
 | `publish --case case.json --format threatfox\|stix\|misp\|markdown --out FILE` | works: refuses cases without `disclosed_at`; writes a local file only |
-| `digest [--out DIR] [--hours N]` | works: Markdown + JSON |
+| `digest [--out DIR] [--hours N]` | works: Markdown + JSON with detections, watched IOC canisters (changed or unchanged since the previous observation) and the latest census |
 | `parse` | works: turns stored raw snapshots into events and canister snapshots (trust weights and IOC flags applied at ingest); safe to re-run |
 | `enrich` | works: re-applies IOC membership to stored events after IOCs change (e.g. a re-seed) |
-| `score` | works: runs rules H1-H6 over stored events and records **candidate** detections (deduplicated) |
+| `score` | works: runs rules H1-H7 over stored events and records **candidate** detections; one per rule and canister, later evidence is merged into it |
 | `collect`, `db migrate` | not wired yet (exit 2). Use `canister inspect` or `census` to collect, and `make migrate` for migrations. |
 
 `make run` starts the scheduler with the default cadences (IOC state hourly, raw gateway

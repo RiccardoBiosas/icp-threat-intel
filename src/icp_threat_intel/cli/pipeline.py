@@ -107,13 +107,15 @@ def score() -> None:
     with make_session_factory(make_engine())() as session, session.begin():
         events = session.scalar(select(func.count()).select_from(EventRow)) or 0
         results = score_stored_events(session)
-    new = [(d, det_id) for d, det_id, created in results if created]
+    new = [(d, det_id) for d, det_id, outcome in results if outcome == "created"]
+    updated = [(d, det_id) for d, det_id, outcome in results if outcome == "updated"]
     typer.echo(
         f"score: {events} event(s), {len(results)} detection(s), "
-        f"{len(new)} new candidate detection(s)"
+        f"{len(new)} new candidate detection(s), {len(updated)} updated with new evidence"
     )
-    for detection, det_id in new:
-        typer.echo(
-            f"  #{det_id} {detection.rule_id}  {detection.subject_id}  "
-            f"score={detection.score:.2f} confidence={detection.weighted_confidence:.2f}"
-        )
+    for label, items in (("new", new), ("updated", updated)):
+        for detection, det_id in items:
+            typer.echo(
+                f"  {label} #{det_id} {detection.rule_id}  {detection.subject_id}  "
+                f"score={detection.score:.2f} confidence={detection.weighted_confidence:.2f}"
+            )

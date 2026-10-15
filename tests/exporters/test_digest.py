@@ -15,6 +15,7 @@ from icp_threat_intel.alerting.digest import (
     write_digest,
 )
 from icp_threat_intel.alerting.stdout import StdoutNotifier
+from icp_threat_intel.alerting.watch import CensusSummary, WatchedCanister
 from icp_threat_intel.cli.app import app
 from icp_threat_intel.core.enums import DetectionStatus
 from icp_threat_intel.core.models import Case, Notification
@@ -36,7 +37,7 @@ def _detections() -> list:  # type: ignore[type-arg]
 
 def test_digest_markdown_and_json(tmp_path: Path) -> None:
     digest = build_digest(_detections(), period_start=START, period_end=END)
-    assert digest.kind == "digest" and digest.title.endswith("2026-10-14")
+    assert digest.kind == "digest" and digest.title.endswith("2026-10-15")  # period end, not start
     assert "candidate 1, verified 1" in digest.markdown
     rows = [line for line in digest.markdown.splitlines() if line.startswith("| verified")]
     assert digest.markdown.index("| verified") < digest.markdown.index("| candidate") and rows
@@ -47,9 +48,72 @@ def test_digest_markdown_and_json(tmp_path: Path) -> None:
     assert data["counts"]["by_rule"] == {"H1": 2} and len(data["detections"]) == 2
 
 
+def test_watched_canisters_and_census_sections() -> None:
+    at = datetime(2026, 10, 15, 11, 15, tzinfo=UTC)
+    watched = [
+        WatchedCanister(
+            canister_id="tdtqy-oyaaa-aaaae-af2dq-cai",
+            observations=2,
+            last_observed=at,
+            module_hash="abcd1234" + "0" * 56,
+            controllers=("ctl-one",),
+            candid_sha256="c0ffee00" + "0" * 56,
+            gateway="451 denylisted",
+            gateway_since=at - timedelta(minutes=21),
+            changes=(),
+        ),
+        WatchedCanister(
+            canister_id="cjn37-uyaaa-aaaac-qgnva-cai",
+            observations=3,
+            last_observed=at,
+            module_hash="ffff0000" + "0" * 56,
+            controllers=("a", "b"),
+            candid_sha256=None,
+            gateway="200 other",
+            gateway_since=at,
+            changes=("module_hash", "gateway"),
+        ),
+        WatchedCanister(
+            canister_id="aaaaa-aaaaa-aaaaa-aaaaa-cai",
+            observations=0,
+            last_observed=None,
+            module_hash=None,
+            controllers=None,
+            candid_sha256=None,
+            gateway="not fetched",
+            gateway_since=None,
+            changes=(),
+        ),
+    ]
+    census = CensusSummary(
+        run_id="run-1",
+        observed_at=at,
+        canisters=2000,
+        complete_subnets=0,
+        incomplete_subnets=42,
+        ceiling_hit=True,
+        added=2000,
+        removed=0,
+        changed=0,
+    )
+    digest = build_digest([], period_start=START, period_end=END, watched=watched, census=census)
+    md = digest.markdown
+    assert "## Watched canisters" in md
+    assert "| `tdtqy-oyaaa-aaaae-af2dq-cai` | 2026-10-15T11:15Z | `abcd1234…` | 1 |" in md
+    assert "451 denylisted (since 2026-10-15T10:54Z) | unchanged |" in md
+    assert "**CHANGED: module_hash, gateway**" in md
+    assert "| `aaaaa-aaaaa-aaaaa-aaaaa-cai` | never observed |" in md
+    assert "## Census" in md and "2000 canisters" in md and "ceiling hit" in md
+    assert "0 of 42 subnets walked completely" in md
+    assert digest.data["watched"][1]["changes"] == ["module_hash", "gateway"]
+    assert digest.data["census"]["incomplete_subnets"] == 42
+
+
 def test_empty_digest() -> None:
     digest = build_digest([], period_start=START, period_end=END)
     assert "Detections: none" in digest.markdown and digest.data["detections"] == []
+    assert "## Watched canisters" not in digest.markdown and "## Census" not in digest.markdown
+    assert digest.data["watched"] == [] and digest.data["census"] is None
 
 
 def test_alerts_only_for_verified() -> None:

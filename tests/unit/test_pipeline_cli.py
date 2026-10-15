@@ -118,12 +118,36 @@ def test_score_saves_candidates_once(db: tuple[str, sessionmaker[Session]]) -> N
     _run(url, "parse")
     out = _run(url, "score").output
     assert "1 new candidate detection(s)" in out
-    assert f"H1  {TDTQY}" in out
+    assert f"new #1 H1  {TDTQY}" in out
     with sessions() as s:
         (row,) = s.scalars(select(DetectionRow)).all()
     assert row.status is DetectionStatus.CANDIDATE and row.rule_id == "H1"
     assert {r["source_type"] for r in row.evidence_refs} == {"ic_read_state", "raw_gateway"}
-    assert "0 new candidate detection(s)" in _run(url, "score").output
+    again = _run(url, "score").output
+    assert "0 new candidate detection(s), 0 updated with new evidence" in again
+    assert _count(sessions, DetectionRow) == 1
+
+
+def test_rescoring_after_a_new_observation_updates_instead_of_duplicating(
+    db: tuple[str, sessionmaker[Session]],
+) -> None:
+    url, sessions = db
+    _run(url, "parse")
+    _run(url, "score")
+    with sessions() as s, s.begin():  # a later inspection: one more Candid observation
+        latest = s.scalars(
+            select(EventRow).where(EventRow.kind == "canister.candid_observed",
+                                   EventRow.canister_id == TDTQY)
+        ).one()  # fmt: skip
+        s.add(
+            EventRow(**{c: getattr(latest, c) for c in (
+                "kind", "subject_type", "subject_id", "canister_id", "observed_at", "source_id",
+                "source_type", "raw_snapshot_id", "parser", "weight", "is_ioc", "payload")},
+                dedup_key="later-observation")
+        )  # fmt: skip
+    out = _run(url, "score").output
+    assert "0 new candidate detection(s), 1 updated with new evidence" in out
+    assert f"updated #1 H1  {TDTQY}" in out
     assert _count(sessions, DetectionRow) == 1
 
 
@@ -132,7 +156,8 @@ def test_score_with_no_events(tmp_path: Path) -> None:
     engine = make_engine(url)
     Base.metadata.create_all(engine)
     engine.dispose()
-    assert "0 event(s), 0 detection(s), 0 new candidate detection(s)" in _run(url, "score").output
+    out = _run(url, "score").output
+    assert "0 event(s), 0 detection(s), 0 new candidate detection(s)" in out
 
 
 def test_event_from_row_round_trips_and_is_timezone_aware(
@@ -147,4 +172,4 @@ def test_event_from_row_round_trips_and_is_timezone_aware(
         assert event.id == row.id and event.kind == row.kind and event.payload == row.payload
         assert event.observed_at.tzinfo is not None
         results = score_stored_events(s)
-    assert [(d.rule_id, created) for d, _id, created in results] == [("H1", True)]
+    assert [(d.rule_id, outcome) for d, _id, outcome in results] == [("H1", "created")]
