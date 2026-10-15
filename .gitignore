@@ -18,3 +18,7 @@ data/local/
 
 # Local SQLite databases (default ICP_THREAT_INTEL_DATABASE_URL)
 *.db
+*.bak
+
+# Misc
+local-docs/
