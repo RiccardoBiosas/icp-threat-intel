@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "synthetic": true,
+    "source": "raw_gateway",
+    "canister_id": "cjn37-uyaaa-aaaac-qgnva-cai",
+    "request": "http_request_query",
+    "method": "POST",
+    "url": "https://icp-api.io/api/v2/canister/cjn37-uyaaa-aaaac-qgnva-cai/query",
+    "recorded_at": "2026-10-15T00:00:00+00:00",
+    "note": "Synthetic: built from docs/sources/raw-gateway.md (HTTP gateway spec, ic-gateway error map) because no ICP_THREAT_INTEL_CONTACT was configured for make record. Bodies are placeholders, not observations of the canister. See OPEN_QUESTIONS.md."
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "content-type": "application/cbor"
+    },
+    "body_b64": "2dn3omZzdGF0dXNncmVwbGllZGVyZXBseaFjYXJnWFNESURMBWwEovXtiAQCxqShmAYBnOnGmQYEmqGy+Qx6bQNte2wCAHEBcW5+AQAJTm90IGZvdW5kAQxjb250ZW50LXR5cGUKdGV4dC9wbGFpbgCUAQ=="
+  }
+}

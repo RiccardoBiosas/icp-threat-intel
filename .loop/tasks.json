@@ -91,7 +91,7 @@
       "id": "T08",
       "type": "feat",
       "title": "raw gateway fetcher",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "Fetches <id>.raw.icp0.io and <id>.raw.ic0.app with 1 MB cap, 10 s timeout, no off-domain redirects; stores the body through raw_store.",
         "Cassettes for both seed canisters under tests/cassettes/raw_gateway_*; tests cover the size cap, timeout and redirect refusal."

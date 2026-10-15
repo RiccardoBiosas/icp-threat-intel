@@ -35,7 +35,11 @@ _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 
 
 class HostNotAllowed(Exception):
-    """The URL's scheme or host is outside the allowlist."""
+    """The URL's scheme or host is outside the allowlist; ``target`` is the refused URL."""
+
+    def __init__(self, message: str, *, target: str = "") -> None:
+        super().__init__(message)
+        self.target = target
 
 
 class RedirectRefused(HostNotAllowed):
@@ -44,6 +48,10 @@ class RedirectRefused(HostNotAllowed):
 
 class TooManyRedirects(Exception):
     """The redirect chain exceeded ``max_redirects``."""
+
+
+class FetchTimeout(Exception):
+    """The request did not complete within the client timeout."""
 
 
 @dataclass(frozen=True)
@@ -132,14 +140,22 @@ class SafeHttpClient:
     def close(self) -> None:
         self._client.close()
 
-    def get(self, url: str, *, ic_domains_only: bool = False) -> FetchResponse:
+    def get(
+        self, url: str, *, ic_domains_only: bool = False, max_redirects: int | None = None
+    ) -> FetchResponse:
         """GET ``url``, following redirects only to permitted hosts.
 
         With ``ic_domains_only`` (gateway fetches) every hop must stay on IC domains.
+        ``max_redirects`` lowers the client's limit for this call.
         """
+        limit = (
+            self._max_redirects
+            if max_redirects is None
+            else min(max_redirects, self._max_redirects)
+        )
         current = self._check(httpx.URL(url), ic_domains_only=ic_domains_only, redirect=False)
         hops: list[str] = []
-        for _ in range(self._max_redirects + 1):
+        for _ in range(limit + 1):
             response = self._send("GET", current)
             location = response.headers.get("location")
             if response.status_code not in _REDIRECT_STATUSES or not location:
@@ -168,7 +184,7 @@ class SafeHttpClient:
         if reason is None:
             return url
         log.warning("host_refused", host=host, url=str(url), reason=reason, redirect=redirect)
-        raise (RedirectRefused if redirect else HostNotAllowed)(f"{reason}: {url}")
+        raise (RedirectRefused if redirect else HostNotAllowed)(f"{reason}: {url}", target=str(url))
 
     def _send(
         self,
@@ -182,11 +198,15 @@ class SafeHttpClient:
         while True:
             self._limiter.acquire(url.host)
             request = self._client.build_request(method, url, content=content, headers=headers)
-            response = self._client.send(request, stream=True)
             try:
-                body, truncated = self._read_capped(response)
-            finally:
-                response.close()
+                response = self._client.send(request, stream=True)
+                try:
+                    body, truncated = self._read_capped(response)
+                finally:
+                    response.close()
+            except httpx.TimeoutException as exc:
+                log.warning("http_timeout", host=url.host, timeout=self.timeout_seconds)
+                raise FetchTimeout(f"timed out after {self.timeout_seconds} s: {url}") from exc
             result = FetchResponse(
                 url=str(url),
                 status_code=response.status_code,

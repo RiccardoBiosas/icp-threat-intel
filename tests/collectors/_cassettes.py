@@ -94,6 +94,19 @@ class ReplayTransport(httpx.BaseTransport):
         )
 
 
+class RecordingTransport(httpx.BaseTransport):
+    def __init__(self) -> None:
+        self._inner = httpx.HTTPTransport()
+        self.exchanges: list[tuple[httpx.Request, int, dict[str, str], bytes]] = []
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        response = self._inner.handle_request(request)
+        body = response.read()
+        headers = dict(response.headers)
+        self.exchanges.append((request, response.status_code, headers, body))
+        return httpx.Response(response.status_code, headers=response.headers, content=body)
+
+
 def write(
     canister_id: str,
     request: str,
