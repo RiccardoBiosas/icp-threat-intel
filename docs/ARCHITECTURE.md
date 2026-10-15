@@ -38,7 +38,7 @@ flowchart LR
 
 | Stage | Package | Notes |
 |---|---|---|
-| Collect | `collectors/` | `read_state.py`, `raw_gateway.py`, `dashboard.py`, `signals_feed.py`, `signals_search.py` (community forums) and `signals_blocklist.py` (community phishing blocklists), all low authority; every response, errors included, becomes a `RawFetch`. |
+| Collect | `collectors/` | `read_state.py`, `raw_gateway.py`, `dashboard.py`, `signals_feed.py`, `signals_search.py` (community forums), `signals_hn.py` (Hacker News) and `signals_blocklist.py` (community phishing blocklists), all low authority; every response, errors included, becomes a `RawFetch`. |
 | Store | `raw_store/` | Redaction (guardrail 5) before insert; idempotent on (source, url, sha256). Parsers re-run over history. |
 | Parse | `parsers/` | One parser per source; deterministic dedup keys; `parsers/ingest.py` persists events and canister snapshots. |
 | Enrich | `enrichment/` | Source reliability (0-100, `core/trust.py`) applied at ingest; IOC membership from the `iocs` table. LLM and Wasm hooks are documented, not implemented. |

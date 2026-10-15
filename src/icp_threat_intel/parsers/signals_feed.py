@@ -6,6 +6,8 @@
   ``signal.canister_listed`` per listed ICP canister (``parsers/signals_blocklist.py``);
 * a search page (``request = search``) gives only ``signal.search_polled`` (subject
   ``<feed>:<term>``; hit and topic counts); posts come from the topic pages it led to;
+* Hacker News search pages (``request = hn_search``) are parsed like posts too, each hit with
+  its news.ycombinator.com permalink;
 * latest-posts, topic and topic-posts pages are parsed alike, so a post seen both ways
   keeps one subject;
 * a post that names a canister id, a threat keyword or an IOC term gives
@@ -31,6 +33,7 @@ from icp_threat_intel.collectors.signals_feed import (
     extract_posts,
     extract_topic_posts,
 )
+from icp_threat_intel.collectors.signals_hn import extract_hn_posts
 from icp_threat_intel.collectors.signals_search import extract_search_hits
 from icp_threat_intel.core.enums import SourceType
 from icp_threat_intel.core.models import Event, ParseResult, RawSnapshot
@@ -50,6 +53,8 @@ def _excerpt(text: str) -> str:
 
 
 def _post_url(origin: str, post: ForumPost) -> str | None:
+    if post.url is not None:
+        return post.url
     if post.topic_id is None:
         return None
     slug = f"{post.topic_slug}/" if post.topic_slug else ""
@@ -97,6 +102,8 @@ class SignalsFeedParser:
         polled: dict[str, Any] = {"http_status": snapshot.http_status, "feed": feed}
         if request in _TOPIC_REQUESTS:
             polled["request"] = request
+        if request == "hn_search":
+            polled |= {"request": request, "query": meta.get("query")}
         subject = ("signal_feed", feed)
         if snapshot.http_status != 200:
             event = self._event(
@@ -106,6 +113,8 @@ class SignalsFeedParser:
         if request in _TOPIC_REQUESTS:
             topic = {k: meta.get(k) for k in ("topic_title", "topic_slug", "category_id")}
             posts = extract_topic_posts(snapshot.body, topic)
+        elif request == "hn_search":
+            posts = extract_hn_posts(snapshot.body)
         else:
             posts = extract_posts(snapshot.body)
         if posts is None:

@@ -84,6 +84,7 @@ class ForumPost:
     staff: bool
     category_id: int | None
     raw: str
+    url: str | None = None  # set when the source has its own permalink (Hacker News)
 
 
 def _int(value: object) -> int | None:

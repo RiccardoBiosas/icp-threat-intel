@@ -155,3 +155,16 @@ def check_search_term(term: str, ioc_values: Iterable[str] = ()) -> str:
         if (len(value) >= MIN_TERM_CHARS and value in term) or tokens & words:
             raise UnsafeSearchTerm(f"search term contains an IOC value: {term!r}")
     return term
+
+
+# Hacker News search (``collectors/signals_hn.py``). Algolia logs queries too, and Hacker News
+# is not about ICP, so each query carries ICP context and passes ``check_search_term``;
+# threat keywords are matched locally in the results, never sent.
+HN_QUERIES: tuple[str, ...] = (
+    "internet computer",
+    "dfinity",
+    "icp canister",
+    "canisterworm",
+    "canistersprawl",
+    "teampcp",
+)

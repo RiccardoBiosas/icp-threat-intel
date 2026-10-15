@@ -6,6 +6,7 @@ Every command from SPEC section 6 is registered here. Commands not built yet exi
 
 import typer
 
+from icp_threat_intel.cli import collect_feeds  # noqa: F401  (registers collect subcommands)
 from icp_threat_intel.cli.canister import canister_app
 from icp_threat_intel.cli.collect import collect_app
 from icp_threat_intel.cli.db import db_app
