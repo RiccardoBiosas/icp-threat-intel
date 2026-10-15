@@ -140,7 +140,7 @@ def test_state_snapshot_has_module_hash_and_controllers(
     assert snapshot.controllers == (controller,)
     assert snapshot.raw_snapshot_id is not None
     (event,) = result.events
-    assert event.kind == "canister.state_read"
+    assert event.kind == "canister.state_observed"
     assert event.payload["status"] == "ok"
     assert event.payload["verification"] == "unverified:no_bls"
     assert event.payload["cert_time"] == cas.SYNTHETIC_TIME.isoformat()
@@ -153,7 +153,7 @@ def test_candid_is_parsed_with_query_and_update_annotation(
     result = _parsed(engine, fetches)[(TDTQY, "candid")]
     assert result.canister_snapshots == ()
     (event,) = result.events
-    assert event.kind == "canister.candid_read"
+    assert event.kind == "canister.candid_observed"
     assert event.payload["status"] == "ok"
     assert len(event.payload["candid_sha256"]) == 64
     methods = {m["name"]: m for m in event.payload["candid_methods"]}

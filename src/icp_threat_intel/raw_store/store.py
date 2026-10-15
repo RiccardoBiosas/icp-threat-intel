@@ -17,13 +17,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from icp_threat_intel.core.enums import SourceType
 from icp_threat_intel.core.models import RawFetch, RawSnapshot, RawSnapshotRef
 from icp_threat_intel.core.redaction import redact, redact_headers
+from icp_threat_intel.core.trust import default_reliability
 from icp_threat_intel.db.models import RawSnapshotRow, Source
 
 log = structlog.get_logger(__name__)
-
-# Placeholder weight for sources first seen by the raw store; core/trust.py (T10) owns the
-# real per-source weights.
-DEFAULT_RELIABILITY = 50
 
 
 class SnapshotNotFound(KeyError):
@@ -47,7 +44,7 @@ def _redact_value(value: Any, kinds: set[str]) -> Any:
 
 
 def get_or_create_source(session: Session, name: str, source_type: SourceType, url: str) -> Source:
-    """Return the ``sources`` row called ``name``, creating it with a placeholder weight."""
+    """Return the ``sources`` row called ``name``, creating it with its type's default weight."""
     source = session.scalar(select(Source).where(Source.name == name))
     if source is not None:
         if source.source_type != source_type:
@@ -56,7 +53,10 @@ def get_or_create_source(session: Session, name: str, source_type: SourceType, u
     parts = urllib.parse.urlsplit(url)
     base_url = f"{parts.scheme}://{parts.netloc}" if parts.netloc else ""
     source = Source(
-        name=name, source_type=source_type, base_url=base_url, reliability=DEFAULT_RELIABILITY
+        name=name,
+        source_type=source_type,
+        base_url=base_url,
+        reliability=default_reliability(source_type),
     )
     session.add(source)
     session.flush()

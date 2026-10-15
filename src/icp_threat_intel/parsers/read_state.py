@@ -3,8 +3,8 @@
 One raw snapshot holds one request from ``collectors/read_state.py``:
 
 * ``state`` gives a ``CanisterSnapshot`` (module hash, controllers) and a
-  ``canister.state_read`` event;
-* ``candid`` gives a ``canister.candid_read`` event with the parsed method list, or a
+  ``canister.state_observed`` event;
+* ``candid`` gives a ``canister.candid_observed`` event with the parsed method list, or a
   status saying why no interface was read (absent, unreadable, unparseable).
 
 Every payload carries ``verification`` (currently always ``unverified:no_bls``) and the
@@ -26,7 +26,8 @@ from icp_threat_intel.core.ic_certificate import (
     decode_principal_list,
 )
 from icp_threat_intel.core.ic_encoding import principal_to_text
-from icp_threat_intel.core.models import CanisterSnapshot, Event, ParseResult, RawSnapshot
+from icp_threat_intel.core.models import CanisterSnapshot, ParseResult, RawSnapshot
+from icp_threat_intel.parsers.base import canister_event
 
 PARSER_NAME = "read_state"
 
@@ -112,15 +113,8 @@ class ReadStateParser:
         payload: dict[str, Any],
         canister: CanisterSnapshot | None = None,
     ) -> ParseResult:
-        event = Event(
-            kind="canister.state_read" if request == "state" else "canister.candid_read",
-            subject_type="canister",
-            subject_id=canister_id,
-            canister_id=canister_id,
-            observed_at=snapshot.fetched_at,
-            source_type=self.source_type,
-            parser=f"{PARSER_NAME}@{self.version}",
-            raw_snapshot_id=snapshot.id,
-            payload={**payload, "synthetic": snapshot.synthetic},
+        kind = "canister.state_observed" if request == "state" else "canister.candid_observed"
+        event = canister_event(
+            snapshot, f"{PARSER_NAME}@{self.version}", kind, canister_id, payload
         )
         return ParseResult(events=(event,), canister_snapshots=(canister,) if canister else ())

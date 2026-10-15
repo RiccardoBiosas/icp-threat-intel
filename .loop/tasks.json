@@ -113,7 +113,7 @@
       "id": "T10",
       "type": "feat",
       "title": "parsers to normalized events",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "Parsers turn raw snapshots from T07-T09 into events and canister_snapshots; re-running over the same snapshots produces identical events.",
         "Source trust weights applied at ingest."

@@ -61,3 +61,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T09 verify command, exit 0; make check 289 passed)
 - Decisions: per canister GET /api/v3/canisters/{id}, then /api/v4/subnets/{subnet} when a subnet id is found; non-200 kept as evidence, no subnet request then. Client EXPERIMENTAL (no response schema): fields read defensively, missing -> None, principals validated, module_hash lowercased without 0x. Cassettes synthetic (no contact); rebuild with python -m tests.collectors._dashboard_cassettes.
 - Follow-ups: confirm canister fields from the first live cassette; controller pivot (/api/v4/canisters?controller_id=) and proposals belong to census (T15?) / NNS work; T10 parser maps DashboardCanister to events and CanisterSnapshot
+
+## 2026-10-15T07:38:47Z T10 attempt 1
+- Changed: core/trust.py, enrichment/{trust,ioc_join,extension_points}.py, parsers/{base,raw_gateway,dashboard,ingest}.py, parsers/read_state.py (PLAN kinds), core/models.py (CanisterSnapshot.controllers optional, candid_methods dicts), raw_store/store.py + db/seed.py (per-type default weights), tests/parsers/*, tests/unit/test_trust.py, OPEN_QUESTIONS.md
+- Verify: pass (T10 verify command, exit 0; make check 318 passed; make coverage ok)
+- Decisions: event kinds canister.state_observed, canister.candid_observed, canister.subnet_observed, gateway.http_request_queried, gateway.body_observed. Ingestor parses -> TrustEnricher (sources.reliability) -> IocJoinEnricher (iocs values via SPEC regex + canisters.is_ioc) -> EventRow by dedup_key; canister_snapshots deduped on (canister, raw snapshot, source); canisters row projected from non-None fields and candid events. Gateway payload carries body_class, excerpt (512 chars), denylisted, error_cause.
+- Follow-ups: rules (T11+) read payload fields above; T14 uses core.trust.weighted_confidence; CLI parse/enrich commands still to wire

@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from icp_threat_intel.core.enums import IocType, SourceType
+from icp_threat_intel.core.trust import default_reliability
 from icp_threat_intel.db.models import CANISTER_ID_RE, Canister, Ioc, Source
-from icp_threat_intel.raw_store.store import DEFAULT_RELIABILITY
 
 DEFAULT_SEED_PATH = Path(__file__).resolve().parents[3] / "data" / "seed_iocs.yaml"
 
@@ -120,7 +120,7 @@ def apply_seed(session: Session, seed: SeedFile) -> SeedResult:
                 name=s.name,
                 source_type=s.source_type,
                 base_url=s.base_url,
-                reliability=DEFAULT_RELIABILITY,
+                reliability=default_reliability(s.source_type),
             )
             session.add(row)
             session.flush()

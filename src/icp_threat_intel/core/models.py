@@ -87,9 +87,9 @@ class CanisterSnapshot(_Frozen):
     source_type: SourceType
     status: CanisterStatus = CanisterStatus.UNKNOWN
     subnet: str | None = None
-    controllers: tuple[str, ...] = ()
+    controllers: tuple[str, ...] | None = None  # None: not observed by this source
     module_hash: str | None = None
-    candid_methods: tuple[str, ...] | None = None
+    candid_methods: tuple[dict[str, Any], ...] | None = None
     candid_sha256: str | None = None
     raw_snapshot_id: int | None = None
     census_run_id: str | None = None
