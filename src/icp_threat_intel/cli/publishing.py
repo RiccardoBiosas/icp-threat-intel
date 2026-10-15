@@ -78,12 +78,21 @@ def digest(
     show_all: Annotated[
         bool, typer.Option("--all", help="Show every matched signal (overrides --limit).")
     ] = False,
+    keyword: Annotated[
+        list[str] | None,
+        typer.Option("--keyword", help="Only signals with this keyword label (repeatable)."),
+    ] = None,
+    ioc_only: Annotated[
+        bool, typer.Option("--ioc-only", help="Only signals naming an IOC canister or value.")
+    ] = False,
 ) -> None:
     """Build the digest (Markdown and JSON) from detections in the database.
 
     ``--signals-only`` writes a separate signals digest (``icp-threat-intel_signals_digest_*``)
     with just the community forum posts. Signals are capped at ``--limit`` (default 20), or
     not at all with ``--all``; the digest says how many matched posts it left out.
+    ``--keyword`` (any of the given labels) and ``--ioc-only`` narrow the signals first; the
+    filter is recorded in the digest.
 
     Files are named after the period end in UTC, to the second, and existing files are
     never replaced unless ``--overwrite`` is given.
@@ -91,22 +100,37 @@ def digest(
     from sqlalchemy import select
 
     from icp_threat_intel.alerting.digest import DigestExists, build_digest, write_digest
-    from icp_threat_intel.alerting.signals import build_signals_digest, matched_signals
+    from icp_threat_intel.alerting.signals import (
+        SignalFilter,
+        build_signals_digest,
+        matched_signals,
+    )
     from icp_threat_intel.alerting.watch import latest_census, watched_canisters
     from icp_threat_intel.db.models import DetectionRow
     from icp_threat_intel.db.session import make_engine, make_session_factory
     from icp_threat_intel.verification.store import to_model
 
+    try:
+        signal_filter = SignalFilter.create(keyword or (), ioc_only=ioc_only)
+    except ValueError as exc:
+        typer.echo(f"digest: {exc}", err=True)
+        raise typer.Exit(code=2) from None
     end = _now()
     start = end - timedelta(hours=hours)
     with make_session_factory(make_engine())() as session:
-        matched = matched_signals(session, start)
+        matched = [p for p in matched_signals(session, start) if signal_filter.matches(p)]
         signals = matched if show_all else matched[:limit]
         total = len(matched)
         if signals_only:
             detections, report = (
                 [],
-                build_signals_digest(signals, period_start=start, period_end=end, total=total),
+                build_signals_digest(
+                    signals,
+                    period_start=start,
+                    period_end=end,
+                    total=total,
+                    signal_filter=signal_filter,
+                ),
             )
         else:
             rows = session.scalars(select(DetectionRow).where(DetectionRow.updated_at >= start))
@@ -119,6 +143,7 @@ def digest(
                 census=latest_census(session),
                 signals=signals,
                 signals_total=total,
+                signals_filter=signal_filter,
             )
     try:
         md, js = write_digest(report, out_dir, overwrite=overwrite)

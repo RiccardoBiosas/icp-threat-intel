@@ -11,7 +11,7 @@ table breaks in the digest. Post URLs are shown as code, not as links.
 """
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from icp_threat_intel.core.models import Notification
 from icp_threat_intel.db.models import EventRow
 from icp_threat_intel.parsers.ingest import ioc_canisters
+from icp_threat_intel.parsers.signals_keywords import KEYWORDS
 
 MAX_SIGNALS = 20
 TITLE_CHARS = 80
@@ -107,6 +108,47 @@ def recent_signals(
     return posts if limit is None else posts[:limit]
 
 
+@dataclass(frozen=True)
+class SignalFilter:
+    """Which matched posts a digest keeps: any of ``keywords`` (labels), IOC matches only."""
+
+    keywords: tuple[str, ...] = ()
+    ioc_only: bool = False
+
+    @classmethod
+    def create(cls, keywords: Iterable[str] = (), ioc_only: bool = False) -> "SignalFilter":
+        """Validate labels against ``signals_keywords.KEYWORDS``; refuse unknown ones."""
+        labels = tuple(sorted({k.strip().lower() for k in keywords}))
+        unknown = [k for k in labels if k not in KEYWORDS]
+        if unknown:
+            raise ValueError(
+                f"unknown keyword label(s): {unknown}; known: {', '.join(sorted(KEYWORDS))}"
+            )
+        return cls(keywords=labels, ioc_only=ioc_only)
+
+    @property
+    def active(self) -> bool:
+        return bool(self.keywords) or self.ioc_only
+
+    def matches(self, post: SignalPost) -> bool:
+        if self.ioc_only and not post.names_ioc:
+            return False
+        return not self.keywords or bool(set(self.keywords) & set(post.keywords))
+
+    def describe(self) -> str:
+        parts = [f"keywords {', '.join(self.keywords)}"] if self.keywords else []
+        return "; ".join([*parts, *(["IOC matches only"] if self.ioc_only else [])])
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"keywords": list(self.keywords), "ioc_only": self.ioc_only}
+
+
+def filter_lines(signal_filter: SignalFilter | None) -> list[str]:
+    if signal_filter is None or not signal_filter.active:
+        return []
+    return ["", f"Filter: {signal_filter.describe()}"]
+
+
 def left_out_note(shown: int, total: int | None) -> list[str]:
     """A line saying how many matched posts the digest leaves out, if any."""
     if total is None or total <= shown:
@@ -118,10 +160,15 @@ def left_out_note(shown: int, total: int | None) -> list[str]:
     ]
 
 
-def signals_section(posts: Sequence[SignalPost], total: int | None = None) -> list[str]:
+def signals_section(
+    posts: Sequence[SignalPost],
+    total: int | None = None,
+    signal_filter: SignalFilter | None = None,
+) -> list[str]:
     lines = ["", "## Signals (low authority)", "",
              "Community forum posts naming a threat keyword or a known IOC. Context only: "
-             "they never count as verification evidence.", "",
+             "they never count as verification evidence.",
+             *filter_lines(signal_filter), "",
              "| Posted | Feed | Topic | Keywords | Indicators | Author | Post |",
              "|---|---|---|---|---|---|---|"]  # fmt: skip
     for p in posts:
@@ -152,6 +199,7 @@ def build_signals_digest(
     period_start: datetime,
     period_end: datetime,
     total: int | None = None,
+    signal_filter: SignalFilter | None = None,
 ) -> Notification:
     """A digest with only the signals feed (``digest --signals-only``)."""
     title = f"icp-threat-intel signals digest {period_end.date().isoformat()}"
@@ -161,13 +209,16 @@ def build_signals_digest(
         f"Period: {period_start.isoformat()} to {period_end.isoformat()}",
         "",
         _signals_line(len(posts), total),
+        *filter_lines(signal_filter),
     ]
     if posts:
         lines += signals_section(posts, total)
-    data = {
+    data: dict[str, Any] = {
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
         "signals_total": total if total is not None else len(posts),
         "signals": [p.to_dict() for p in posts],
     }
+    if signal_filter is not None and signal_filter.active:
+        data["signals_filter"] = signal_filter.to_dict()
     return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)
