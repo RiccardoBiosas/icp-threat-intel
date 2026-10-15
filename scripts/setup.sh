@@ -7,7 +7,9 @@
 # SQLite database is backed up (timestamped *.bak, git-ignored) before it is migrated.
 #
 # Usage: scripts/setup.sh [options]
-#   --postgres        start the bundled Postgres (docker compose) instead of using SQLite
+#   --postgres        start the bundled Postgres (docker compose) and use the Postgres
+#                     ICP_THREAT_INTEL_DATABASE_URL from .env; without it the database is
+#                     SQLite (./icp_threat_intel.db) unless the URL is exported in the shell
 #   --skip-checks     skip `make check` (lint, mypy, unit tests)
 #   --signals         live: poll the signals feed (community forums) into the raw store
 #   --inspect         live: `canister inspect` the two seed IOC canisters (query-only)
@@ -48,22 +50,58 @@ done
 [[ "$PAGES" =~ ^([1-9]|10)$ ]] || die "--pages must be 1-10"
 [[ $ONLY_SIGNALS -eq 1 && $INSPECT -eq 1 ]] && die "--signals-only cannot be combined with --inspect/--live"
 
-# .env: fill in only variables not already set in the shell; values are never printed or
-# evaluated as shell code.
+# .env: only the project's own variables, and only those not already set in the shell.
+# Values are never printed or evaluated as shell code. The database URL is taken from .env
+# only with --postgres, so a Postgres URL copied from .env.example cannot silently replace
+# the SQLite database.
+ENV_KEYS='^(ICP_THREAT_INTEL_[A-Z0-9_]+|POSTGRES_PASSWORD|ABUSECH_AUTH_KEY|GITHUB_TOKEN)$'
 load_env() {
   [[ -f .env ]] || return 0
-  local line key value
+  local line key value skipped=0
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
     [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
     key="${BASH_REMATCH[2]}" value="${BASH_REMATCH[3]}"
     value="${value%\"}" value="${value#\"}" value="${value%\'}" value="${value#\'}"
+    if [[ ! "$key" =~ $ENV_KEYS ]]; then
+      skipped=$((skipped + 1))
+      continue
+    fi
+    if [[ "$key" == ICP_THREAT_INTEL_DATABASE_URL && $POSTGRES -eq 0 ]]; then
+      echo "ignoring ICP_THREAT_INTEL_DATABASE_URL from .env (pass --postgres to use it)"
+      continue
+    fi
     [[ -n "${!key+x}" ]] || export "$key=$value"
   done < .env
-  echo "loaded .env (shell variables take precedence)"
+  echo "loaded .env (shell variables take precedence; $skipped unrelated key(s) ignored)"
 }
 
-step "Prerequisites"
+# Fail early, with the password hidden, when the database cannot be reached.
+db_preflight() {
+  uv run python -I - <<'PY' || die "database unreachable; check ICP_THREAT_INTEL_DATABASE_URL"
+import sys
+
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+from icp_threat_intel.db.session import make_engine
+
+engine = make_engine()
+try:
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+except SQLAlchemyError as exc:
+    url = engine.url.render_as_string(hide_password=True)
+    print(f"cannot connect to {url}: {str(exc.orig).splitlines()[0]}", file=sys.stderr)
+    sys.exit(1)
+finally:
+    engine.dispose()
+PY
+}
+
+MODE="full setup"
+[[ $ONLY_SIGNALS -eq 1 ]] && MODE="signals only"
+step "Prerequisites (mode: $MODE; live: signals=$SIGNALS inspect=$INSPECT)"
 command -v uv >/dev/null || die "uv not found: curl -LsSf https://astral.sh/uv/install.sh | sh"
 load_env
 if [[ $POSTGRES -eq 1 ]]; then
@@ -71,6 +109,9 @@ if [[ $POSTGRES -eq 1 ]]; then
   [[ -n "${POSTGRES_PASSWORD:-}" ]] || die "--postgres needs POSTGRES_PASSWORD (see .env.example)"
   [[ "${ICP_THREAT_INTEL_DATABASE_URL:-}" == postgresql* ]] \
     || die "--postgres needs a postgresql+psycopg:// ICP_THREAT_INTEL_DATABASE_URL"
+  if [[ -z "$(docker compose ps -q db 2>/dev/null)" ]] && ss -ltn 2>/dev/null | grep -qE '[:.]5432\b'; then
+    die "port 5432 is already used by another Postgres; stop it or change the db port mapping"
+  fi
 fi
 if [[ $SIGNALS -eq 1 || $INSPECT -eq 1 ]]; then
   [[ -n "${ICP_THREAT_INTEL_CONTACT:-}" ]] \
@@ -107,7 +148,8 @@ elif [[ "$DB_URL" == sqlite:///* ]]; then
   fi
 fi
 
-step "Database migrations (alembic upgrade head)"
+step "Database migrations (alembic upgrade head) on ${DB_URL%%://*}"
+[[ "$DB_URL" == sqlite:///* ]] || db_preflight
 make migrate
 
 if [[ $ONLY_SIGNALS -eq 0 ]]; then
