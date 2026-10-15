@@ -111,48 +111,79 @@ def recent_signals(
     return posts if limit is None else posts[:limit]
 
 
+def known_feeds() -> tuple[str, ...]:
+    """Every signals feed name: forums, Hacker News and blocklists."""
+    from icp_threat_intel.collectors.signals_blocklist import DEFAULT_BLOCKLISTS
+    from icp_threat_intel.collectors.signals_feed import DEFAULT_FEEDS
+    from icp_threat_intel.collectors.signals_hn import FEED_NAME
+
+    names = {f.name for f in DEFAULT_FEEDS} | {FEED_NAME} | {b.name for b in DEFAULT_BLOCKLISTS}
+    return tuple(sorted(names))
+
+
+def _names(entries: list[str], known: Iterable[str], what: str) -> tuple[str, ...]:
+    """Comma-separated or repeated names, lower-cased, de-duplicated, checked against ``known``.
+
+    Empty pieces are ignored, but entries with no name at all are refused.
+    """
+    allowed = sorted(known)
+    pieces = (piece.strip().lower() for entry in entries for piece in entry.split(","))
+    names = tuple(sorted({p for p in pieces if p}))
+    if entries and not names:
+        raise ValueError(f"no {what}s given; known: {', '.join(allowed)}")
+    unknown = [n for n in names if n not in allowed]
+    if unknown:
+        raise ValueError(f"unknown {what}(s): {unknown}; known: {', '.join(allowed)}")
+    return names
+
+
 @dataclass(frozen=True)
 class SignalFilter:
-    """Which matched posts a digest keeps: any of ``keywords`` (labels), IOC matches only."""
+    """Which matched posts a digest keeps: from ``feeds``, with any of ``keywords`` (labels),
+    IOC matches only. Every set criterion must hold."""
 
     keywords: tuple[str, ...] = ()
     ioc_only: bool = False
+    feeds: tuple[str, ...] = ()
 
     @classmethod
-    def create(cls, keywords: Iterable[str] = (), ioc_only: bool = False) -> "SignalFilter":
-        """Validate labels against ``signals_keywords.KEYWORDS``; refuse unknown ones.
+    def create(
+        cls,
+        keywords: Iterable[str] = (),
+        ioc_only: bool = False,
+        feeds: Iterable[str] = (),
+    ) -> "SignalFilter":
+        """Validate keyword labels (``signals_keywords.KEYWORDS``) and feed names
+        (``known_feeds``); refuse unknown ones.
 
-        Each entry may hold several comma-separated labels (``"phishing,drainer"``); entries
-        from repeated ``--keyword`` flags are combined. Empty pieces are ignored, but entries
-        with no label at all are refused.
+        Each entry may hold several comma-separated names (``"phishing,drainer"``,
+        ``"dfinity-forum,hackernews"``); entries from repeated flags are combined.
         """
-        entries = list(keywords)
-        pieces = (piece.strip().lower() for entry in entries for piece in entry.split(","))
-        labels = tuple(sorted({p for p in pieces if p}))
-        if entries and not labels:
-            raise ValueError(f"no keyword labels given; known: {', '.join(sorted(KEYWORDS))}")
-        unknown = [k for k in labels if k not in KEYWORDS]
-        if unknown:
-            raise ValueError(
-                f"unknown keyword label(s): {unknown}; known: {', '.join(sorted(KEYWORDS))}"
-            )
-        return cls(keywords=labels, ioc_only=ioc_only)
+        labels = _names(list(keywords), KEYWORDS, "keyword label")
+        feed_names = _names(list(feeds), known_feeds(), "feed name")
+        return cls(keywords=labels, ioc_only=ioc_only, feeds=feed_names)
 
     @property
     def active(self) -> bool:
-        return bool(self.keywords) or self.ioc_only
+        return bool(self.keywords) or self.ioc_only or bool(self.feeds)
 
     def matches(self, post: SignalPost) -> bool:
+        if self.feeds and post.feed not in self.feeds:
+            return False
         if self.ioc_only and not post.names_ioc:
             return False
         return not self.keywords or bool(set(self.keywords) & set(post.keywords))
 
     def describe(self) -> str:
-        parts = [f"keywords {', '.join(self.keywords)}"] if self.keywords else []
+        parts = [f"feeds {', '.join(self.feeds)}"] if self.feeds else []
+        parts += [f"keywords {', '.join(self.keywords)}"] if self.keywords else []
         return "; ".join([*parts, *(["IOC matches only"] if self.ioc_only else [])])
 
     def to_dict(self) -> dict[str, Any]:
-        return {"keywords": list(self.keywords), "ioc_only": self.ioc_only}
+        data: dict[str, Any] = {"keywords": list(self.keywords), "ioc_only": self.ioc_only}
+        if self.feeds:
+            data["feeds"] = list(self.feeds)
+        return data
 
 
 def filter_lines(signal_filter: SignalFilter | None) -> list[str]:

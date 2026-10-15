@@ -89,6 +89,14 @@ def digest(
     ioc_only: Annotated[
         bool, typer.Option("--ioc-only", help="Only signals naming an IOC canister or value.")
     ] = False,
+    feed: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--feed",
+            help="Only signals from these feeds, comma-separated (e.g. hackernews or "
+            "dfinity-forum,phishdestroy); the flag can also be repeated.",
+        ),
+    ] = None,
 ) -> None:
     """Build the digest (Markdown and JSON) from detections in the database.
 
@@ -96,7 +104,8 @@ def digest(
     with just the community forum posts. Signals are capped at ``--limit`` (default 20), or
     not at all with ``--all``; the digest says how many matched posts it left out.
     ``--keyword`` (any of the given labels, comma-separated or repeated) and ``--ioc-only``
-    narrow the signals first; the filter is recorded in the digest.
+    narrow the signals first, and ``--feed`` (comma-separated or repeated) keeps only the
+    given feeds, blocklists included; the filter is recorded in the digest.
 
     Files are named after the period end in UTC, to the second, and existing files are
     never replaced unless ``--overwrite`` is given.
@@ -116,7 +125,7 @@ def digest(
     from icp_threat_intel.verification.store import to_model
 
     try:
-        signal_filter = SignalFilter.create(keyword or (), ioc_only=ioc_only)
+        signal_filter = SignalFilter.create(keyword or (), ioc_only=ioc_only, feeds=feed or ())
     except ValueError as exc:
         typer.echo(f"digest: {exc}", err=True)
         raise typer.Exit(code=2) from None
@@ -128,7 +137,11 @@ def digest(
         listed = (
             []
             if signal_filter.keywords
-            else blocklisted_canisters(session, start, ioc_only=signal_filter.ioc_only)
+            else [
+                r
+                for r in blocklisted_canisters(session, start, ioc_only=signal_filter.ioc_only)
+                if not signal_filter.feeds or set(r.feeds) & set(signal_filter.feeds)
+            ]
         )
         signals = matched if show_all else matched[:limit]
         total = len(matched)
