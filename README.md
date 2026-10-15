@@ -1,8 +1,7 @@
 # icp-threat-intel
 
 Threat intelligence and threat hunting for Internet Computer (ICP) canisters used as attack
-infrastructure. See `SPEC.md` for scope and `PLAN.md` for the design. The full README
-arrives in task T17; until then this file covers local setup.
+infrastructure. See `SPEC.md` for scope and `PLAN.md` for the design.
 
 Licensed under Apache-2.0.
 
