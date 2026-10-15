@@ -37,3 +37,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T05 verify command, exit 0; 21 new tests, 194 total)
 - Decisions: new deps pyyaml (seed file) + types-PyYAML (mypy). save() redacts body, headers, URL and request_meta before insert; idempotent on (source, url, original sha256), first fetched_at kept; savepoint + re-query on a race. Sources auto-registered with placeholder reliability 50. Seed: 6 IOCs, 2 campaigns, vendor URLs empty, ThreatFox-only IOCs have no campaign (OPEN_QUESTIONS T05). No campaigns table: campaign facts live in the YAML and the dry-run output.
 - Follow-ups: `db migrate` CLI still a stub (make migrate works); T06 vendor-rss note should supply write-up URLs for the seed
+
+## 2026-10-15T06:54:26Z T06 attempt 1
+- Changed: docs/sources/*.md (11 notes, one research subagent each; 5 VERIFIED, 6 EXPERIMENTAL), OPEN_QUESTIONS.md (7 T06 entries)
+- Verify: pass (T06 verify command, exit 0; section 5 pre-commit checks clean; make check 194 passed)
+- Decisions: read_state uses manual cbor2 over core/http.py at /api/v3 (v2 deprecated), candid:service in its own request; CMC top-up derivation reproduced 7 DFINITY vectors and was re-computed independently. Raw gateway can upgrade a GET to an update call, so T08 pre-checks http_request by query. Non-IC hosts stay out of ALLOWLIST until each collector task adds them.
+- Follow-ups: T07 switch ic_client to v3 + pick a BLS lib; T08 upgrade pre-check and 451 denylisted signal; T09 use v4 listings, confirm fields; seed source_url from vendor-rss.md write-ups

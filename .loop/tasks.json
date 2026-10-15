@@ -67,7 +67,7 @@
       "id": "T06",
       "type": "docs",
       "title": "source research notes (one subagent per source)",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "One note per file listed in SPEC section 5 under docs/sources/, researched from current official documentation.",
         "First line of each note is exactly 'Status: VERIFIED' or 'Status: EXPERIMENTAL'. Each note lists endpoints, auth, rate limits, a sample response and the URLs consulted.",
