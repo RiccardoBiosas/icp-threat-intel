@@ -67,3 +67,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T10 verify command, exit 0; make check 318 passed; make coverage ok)
 - Decisions: event kinds canister.state_observed, canister.candid_observed, canister.subnet_observed, gateway.http_request_queried, gateway.body_observed. Ingestor parses -> TrustEnricher (sources.reliability) -> IocJoinEnricher (iocs values via SPEC regex + canisters.is_ioc) -> EventRow by dedup_key; canister_snapshots deduped on (canister, raw snapshot, source); canisters row projected from non-None fields and candid events. Gateway payload carries body_class, excerpt (512 chars), denylisted, error_cause.
 - Follow-ups: rules (T11+) read payload fields above; T14 uses core.trust.weighted_confidence; CLI parse/enrich commands still to wire
+
+## 2026-10-15T07:44:55Z T11 attempt 1
+- Changed: rules/{base,engine,h1_dead_drop}.py, tests/rules/{_events,test_h1}.py
+- Verify: pass (T11 verify command, exit 0; make check green)
+- Decisions: BaseRule.score = signals() + required-signal check + assess(); evidence refs prefer event id, fall back to raw snapshot; weighted_confidence via core.trust over supporting events. H1 pair = update/set/put[_stem] setter (update mode) with get/fetch[_latest][_stem] getter, same stem (CanisterWorm's update_link/get_latest_link). Body signal: gateway.body_observed (200, outcome ok) or http_request_queried (canister status 200), class url/base64/shell, 1..4096 bytes, not truncated. Score 0.7 + 0.15 url body + 0.15 link/url stem. engine.run_rules is pure; persistence left to the CLI.
+- Follow-ups: T13 REGISTRY and test_rules_are_pure; T14 persists detections

@@ -124,7 +124,7 @@
       "id": "T11",
       "type": "feat",
       "title": "rule H1 dead-drop C2",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "H1 implemented per SPEC section 4 with tests on synthetic events: positive (setter/getter pair plus URL-like body), and negatives for each signal alone.",
         "Docstring cites CanisterWorm."
