@@ -103,6 +103,7 @@ def digest(
     """
     from sqlalchemy import select
 
+    from icp_threat_intel.alerting.blocklisted import blocklisted_canisters
     from icp_threat_intel.alerting.digest import DigestExists, build_digest, write_digest
     from icp_threat_intel.alerting.signals import (
         SignalFilter,
@@ -123,6 +124,12 @@ def digest(
     start = end - timedelta(hours=hours)
     with make_session_factory(make_engine())() as session:
         matched = [p for p in matched_signals(session, start) if signal_filter.matches(p)]
+        # blocklists name canisters, not keywords: left out when a keyword filter is set
+        listed = (
+            []
+            if signal_filter.keywords
+            else blocklisted_canisters(session, start, ioc_only=signal_filter.ioc_only)
+        )
         signals = matched if show_all else matched[:limit]
         total = len(matched)
         if signals_only:
@@ -134,6 +141,7 @@ def digest(
                     period_end=end,
                     total=total,
                     signal_filter=signal_filter,
+                    blocklisted=listed,
                 ),
             )
         else:
@@ -148,6 +156,7 @@ def digest(
                 signals=signals,
                 signals_total=total,
                 signals_filter=signal_filter,
+                blocklisted=listed,
             )
     try:
         md, js = write_digest(report, out_dir, overwrite=overwrite)
@@ -157,6 +166,8 @@ def digest(
     shown = f"{len(signals)} signal(s)"
     if len(signals) < total:
         shown = f"{len(signals)} of {total} signal(s)"
+    if listed:
+        shown += f", {len(listed)} blocklisted canister(s)"
     if signals_only:
         typer.echo(f"signals digest: {shown} -> {md}, {js}")
     else:

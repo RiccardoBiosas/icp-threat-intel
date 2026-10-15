@@ -2,6 +2,8 @@
 
 * every page gives ``signal.feed_polled`` (subject: the feed) with a parse status and the
   post-id range, so a failed poll is evidence rather than a silent gap;
+* a blocklist download (``request = blocklist``) gives ``signal.blocklist_polled`` and one
+  ``signal.canister_listed`` per listed ICP canister (``parsers/signals_blocklist.py``);
 * a search page (``request = search``) gives only ``signal.search_polled`` (subject
   ``<feed>:<term>``; hit and topic counts); posts come from the topic pages it led to;
 * latest-posts, topic and topic-posts pages are parsed alike, so a post seen both ways
@@ -34,6 +36,7 @@ from icp_threat_intel.core.enums import SourceType
 from icp_threat_intel.core.models import Event, ParseResult, RawSnapshot
 from icp_threat_intel.enrichment.ioc_join import CANISTER_ID_RE
 from icp_threat_intel.parsers.base import canister_event
+from icp_threat_intel.parsers.signals_blocklist import blocklist_events
 from icp_threat_intel.parsers.signals_keywords import IocTerm, find_ioc_terms, keywords_in
 
 PARSER_NAME = "signals_feed"
@@ -89,6 +92,8 @@ class SignalsFeedParser:
         request = str(meta.get("request") or "latest_posts")
         if request == "search":
             return ParseResult(events=(self._search_event(snapshot, feed),))
+        if request == "blocklist":
+            return ParseResult(events=blocklist_events(snapshot, self.parser_id, feed))
         polled: dict[str, Any] = {"http_status": snapshot.http_status, "feed": feed}
         if request in _TOPIC_REQUESTS:
             polled["request"] = request

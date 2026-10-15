@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from icp_threat_intel.alerting.blocklisted import BlocklistedCanister, blocklisted_section
 from icp_threat_intel.alerting.signals import SignalFilter, SignalPost, signals_section
 from icp_threat_intel.alerting.watch import CensusSummary, WatchedCanister
 from icp_threat_intel.core.enums import DetectionStatus
@@ -78,6 +79,7 @@ def build_digest(
     signals: Sequence[SignalPost] = (),
     signals_total: int | None = None,
     signals_filter: SignalFilter | None = None,
+    blocklisted: Sequence[BlocklistedCanister] = (),
 ) -> Notification:
     ordered = sorted(
         detections,
@@ -102,6 +104,8 @@ def build_digest(
         lines += _census_section(census)
     if signals:
         lines += signals_section(signals, signals_total, signals_filter)
+    if blocklisted:
+        lines += blocklisted_section(blocklisted)
     data: dict[str, Any] = {
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
@@ -117,6 +121,8 @@ def build_digest(
     }
     if signals_filter is not None and signals_filter.active:
         data["signals_filter"] = signals_filter.to_dict()
+    if blocklisted:
+        data["blocklisted"] = [r.to_dict() for r in blocklisted]
     return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)
 
 

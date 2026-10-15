@@ -19,6 +19,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from icp_threat_intel.alerting.blocklisted import BlocklistedCanister, blocklisted_section
 from icp_threat_intel.core.models import Notification
 from icp_threat_intel.db.models import EventRow
 from icp_threat_intel.parsers.ingest import ioc_canisters
@@ -209,6 +210,7 @@ def build_signals_digest(
     period_end: datetime,
     total: int | None = None,
     signal_filter: SignalFilter | None = None,
+    blocklisted: Sequence[BlocklistedCanister] = (),
 ) -> Notification:
     """A digest with only the signals feed (``digest --signals-only``)."""
     title = f"icp-threat-intel signals digest {period_end.date().isoformat()}"
@@ -222,6 +224,8 @@ def build_signals_digest(
     ]
     if posts:
         lines += signals_section(posts, total)
+    if blocklisted:
+        lines += blocklisted_section(blocklisted)
     data: dict[str, Any] = {
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
@@ -230,4 +234,6 @@ def build_signals_digest(
     }
     if signal_filter is not None and signal_filter.active:
         data["signals_filter"] = signal_filter.to_dict()
+    if blocklisted:
+        data["blocklisted"] = [r.to_dict() for r in blocklisted]
     return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)
