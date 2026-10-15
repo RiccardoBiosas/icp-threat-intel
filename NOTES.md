@@ -55,3 +55,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T08 verify command, exit 0; make check 272 passed; make coverage 95.07%)
 - Decisions: http_request query pre-check before any raw GET; upgrade=true, a reject or an undecodable reply skips the GETs. GET policy: ic_domains_only, max 1 redirect hop; timeout, refused redirect and too many redirects are stored as RawFetch with request_meta.outcome. collect_into(collector, store, targets) saves each fetch before parsing. Cassettes synthetic (no contact), rebuild with python -m tests.collectors._gateway_cassettes.
 - Follow-ups: T10 gateway parser should read request_meta.outcome and X-IC-Error-Cause (451 denylisted -> H5 takedown signal); live re-record once contact set
+
+## 2026-10-15T07:24:21Z T09 attempt 1
+- Changed: collectors/dashboard.py (DashboardCollector, extract_canister, extract_subnet), tests/collectors/{_dashboard_cassettes,test_dashboard,test_dashboard_live}.py, tests/cassettes/dashboard_* (4), OPEN_QUESTIONS.md
+- Verify: pass (T09 verify command, exit 0; make check 289 passed)
+- Decisions: per canister GET /api/v3/canisters/{id}, then /api/v4/subnets/{subnet} when a subnet id is found; non-200 kept as evidence, no subnet request then. Client EXPERIMENTAL (no response schema): fields read defensively, missing -> None, principals validated, module_hash lowercased without 0x. Cassettes synthetic (no contact); rebuild with python -m tests.collectors._dashboard_cassettes.
+- Follow-ups: confirm canister fields from the first live cassette; controller pivot (/api/v4/canisters?controller_id=) and proposals belong to census (T15?) / NNS work; T10 parser maps DashboardCanister to events and CanisterSnapshot

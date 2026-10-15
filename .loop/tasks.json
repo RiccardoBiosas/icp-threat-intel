@@ -102,7 +102,7 @@
       "id": "T09",
       "type": "feat",
       "title": "Dashboard API canister metadata collector",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "Client written against docs/sources/dashboard-api.md for canister metadata, subnet membership and controllers.",
         "Cassettes for both seed canisters under tests/cassettes/dashboard_*."

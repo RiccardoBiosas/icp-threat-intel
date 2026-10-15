@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "synthetic": true,
+    "source": "dashboard_api",
+    "canister_id": "cjn37-uyaaa-aaaac-qgnva-cai",
+    "request": "subnet",
+    "method": "GET",
+    "url": "https://ic-api.internetcomputer.org/api/v4/subnets/ui6om-i4iar-3ri4x-tts4n-6moa6-mduaj-tfojv-fvxbd-qmypq-qyba3-qqe",
+    "recorded_at": "2026-10-15T00:00:00+00:00",
+    "note": "Synthetic: built from docs/sources/dashboard-api.md (OpenAPI paths; canister fields inferred, UNVERIFIED) because no ICP_THREAT_INTEL_CONTACT was configured for make record. Values are placeholders, not observations. See OPEN_QUESTIONS.md."
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body_b64": "eyJzdWJuZXRfaWQiOiAidWk2b20taTRpYXItM3JpNHgtdHRzNG4tNm1vYTYtbWR1YWotdGZvanYtZnZ4YmQtcW15cHEtcXliYTMtcXFlIiwgInN1Ym5ldF90eXBlIjogImFwcGxpY2F0aW9uIiwgInN1Ym5ldF9hdXRob3JpemF0aW9uIjogInB1YmxpYyIsICJ0b3RhbF9jYW5pc3RlcnMiOiAiMTAwMCIsICJydW5uaW5nX2NhbmlzdGVycyI6ICI5OTAiLCAic3RvcHBlZF9jYW5pc3RlcnMiOiAiMTAifQ=="
+  }
+}
