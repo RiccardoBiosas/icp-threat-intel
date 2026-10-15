@@ -79,3 +79,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T12 verify command, exit 0; make check green)
 - Decisions: H2 = is_ioc event + lifecycle change (stopped->running flip, controllers or module hash change; explicit *_changed / census.canister_changed events or derived from consecutive same-source state_observed). Optional governance_action signal (proposal.references_target or gateway denylisted) gives "hours since last action". H3 = package.version_published + package.canister_reference whose text matches canister-ID regex, gateway host (host position only) or /tmp/pglog, pgmon.service, systemd user units; score bonuses per match kind and install location. Payload contracts for future producers logged in OPEN_QUESTIONS.
 - Follow-ups: T13 REGISTRY + purity test; README Quickstart was committed by the user separately (4b12b4f), outside the loop
+
+## 2026-10-15T08:17:27Z T13 attempt 1
+- Changed: rules/{stub,h4_cycles_funding,h5_governance,h6_mass_creation,__init__}.py, tests/rules/{test_stubs,test_rules_are_pure}.py
+- Verify: pass (T13 verify command, exit 0; make check green)
+- Decisions: StubRule.score logs rule_stub (rule_id, event count) and returns None. H4 {cmc_topup, ioc_canister}, H5 {proposal_reference}, H6 {creation_burst, opaque_module}; H6 docstring labels the 1 Sept 2026 claim UNVERIFIED; H5 notes the takedown was probably a gateway block. REGISTRY id -> class, all_rules() in id order. Purity test scans rules/ imports (httpx, socket, sqlalchemy, core.http, core.ic_client, collectors) and clock reads.
+- Follow-ups: T14 verification + persistence of detections; real H4/H5/H6 once ledger, NNS and census collectors exist

@@ -146,7 +146,7 @@
       "id": "T13",
       "type": "feat",
       "title": "rule stubs H4-H6 and rule registry",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "H4, H5 and H6 classes with documented required_signals; score() returns None and logs that the rule is a stub.",
         "A REGISTRY mapping rule id to class covers H1-H6."
