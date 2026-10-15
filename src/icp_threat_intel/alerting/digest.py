@@ -6,6 +6,7 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+from icp_threat_intel.alerting.signals import SignalPost, signals_section
 from icp_threat_intel.alerting.watch import CensusSummary, WatchedCanister
 from icp_threat_intel.core.enums import DetectionStatus
 from icp_threat_intel.core.interfaces import Notifier
@@ -73,6 +74,7 @@ def build_digest(
     period_end: datetime,
     watched: Sequence[WatchedCanister] = (),
     census: CensusSummary | None = None,
+    signals: Sequence[SignalPost] = (),
 ) -> Notification:
     ordered = sorted(
         detections,
@@ -95,6 +97,8 @@ def build_digest(
         lines += _watched_section(watched)
     if census is not None:
         lines += _census_section(census)
+    if signals:
+        lines += signals_section(signals)
     data = {
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
@@ -105,6 +109,7 @@ def build_digest(
         "detections": [d.model_dump(mode="json") for d in ordered],
         "watched": [w.to_dict() for w in watched],
         "census": census.to_dict() if census is not None else None,
+        "signals": [p.to_dict() for p in signals],
     }
     return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)
 

@@ -152,6 +152,7 @@ uv run pytest -q tests/guardrails                       # safety guardrails (que
 uv run pytest -q tests/collectors/test_read_state.py    # read_state collector + certificate decoding
 uv run pytest -q tests/collectors/test_raw_gateway.py   # raw gateway fetcher (1 MB cap, timeout, redirects)
 uv run pytest -q tests/collectors/test_dashboard.py     # Dashboard API collector
+uv run pytest -q tests/collectors/test_signals_feed.py  # signals feed (community forums) collector
 uv run pytest -q tests/parsers                          # raw snapshots -> events, trust weights, idempotent ingest
 uv run pytest -q tests/rules                            # detection rules on synthetic events
 ```
@@ -214,11 +215,12 @@ make check                                  # cassette tests may need updating f
 | `census [--ceiling N]` | works: Dashboard API walk, diff against the previous run, events |
 | `verify <id> --to verified\|dismissed --actor ... --reason ...` | works: two-signal state machine |
 | `publish --case case.json --format threatfox\|stix\|misp\|markdown --out FILE` | works: refuses cases without `disclosed_at`; writes a local file only |
-| `digest [--out DIR] [--hours N]` | works: Markdown + JSON with detections, watched IOC canisters (changed or unchanged since the previous observation) and the latest census |
+| `digest [--out DIR] [--hours N]` | works: Markdown + JSON with detections, watched IOC canisters (changed or unchanged since the previous observation), the latest census and recent low-authority signals (forum posts naming a threat keyword or an IOC canister) |
 | `parse` | works: turns stored raw snapshots into events and canister snapshots (trust weights and IOC flags applied at ingest); safe to re-run |
 | `enrich` | works: re-applies IOC membership to stored events after IOCs change (e.g. a re-seed) |
 | `score` | works: runs rules H1-H7 over stored events and records **candidate** detections; one per rule and canister, later evidence is merged into it |
-| `collect`, `db migrate` | not wired yet (exit 2). Use `canister inspect` or `census` to collect, and `make migrate` for migrations. |
+| `collect signals [--feed NAME] [--pages N] [--no-parse]` | works: polls community forums (the signals feed, low authority, `docs/sources/signals-feed.md`) into the raw store and parses them; run by hand, no scheduler job. Needs `ICP_THREAT_INTEL_CONTACT` and migration 0002 (`make migrate`) |
+| bare `collect`, `db migrate` | not wired yet (exit 2). Use `collect signals`, `canister inspect` or `census` to collect, and `make migrate` for migrations. |
 
 `make run` starts the scheduler with the default cadences (IOC state hourly, raw gateway
 every 6 h, registries, ledger and proposals daily, census weekly, digest daily). Only the

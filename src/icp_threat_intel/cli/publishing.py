@@ -65,6 +65,7 @@ def digest(
     from sqlalchemy import select
 
     from icp_threat_intel.alerting.digest import build_digest, write_digest
+    from icp_threat_intel.alerting.signals import recent_signals
     from icp_threat_intel.alerting.watch import latest_census, watched_canisters
     from icp_threat_intel.db.models import DetectionRow
     from icp_threat_intel.db.session import make_engine, make_session_factory
@@ -76,8 +77,14 @@ def digest(
         rows = session.scalars(select(DetectionRow).where(DetectionRow.updated_at >= start))
         detections = [to_model(r) for r in rows]
         watched, census = watched_canisters(session), latest_census(session)
+        signals = recent_signals(session, start)
     report = build_digest(
-        detections, period_start=start, period_end=end, watched=watched, census=census
+        detections,
+        period_start=start,
+        period_end=end,
+        watched=watched,
+        census=census,
+        signals=signals,
     )
     md, js = write_digest(report, out_dir)
-    typer.echo(f"digest: {len(detections)} detection(s) -> {md}, {js}")
+    typer.echo(f"digest: {len(detections)} detection(s), {len(signals)} signal(s) -> {md}, {js}")

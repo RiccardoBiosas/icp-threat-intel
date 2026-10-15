@@ -1,0 +1,110 @@
+"""Digest summary of the signals feed: recent community posts worth a look.
+
+Low-authority context only: these posts never count as verification evidence
+(``core/evidence.py``). A post is listed when it names a threat keyword or an IOC canister;
+a bare canister mention is common on developer forums and is left out. Posts that name an
+IOC canister come first, then posts by forum staff, then the newest.
+
+Titles come from the forum, so ``md_text`` turns them into inert text: no links, HTML or
+table breaks in the digest. Post URLs are shown as code, not as links.
+"""
+
+import re
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from icp_threat_intel.db.models import EventRow
+from icp_threat_intel.parsers.ingest import ioc_canisters
+
+MAX_SIGNALS = 20
+TITLE_CHARS = 80
+_MARKUP = re.compile(r"[\[\]<>`*_]")
+
+
+def md_text(value: str) -> str:
+    """One line of plain text safe inside a Markdown table cell."""
+    flat = " ".join(_MARKUP.sub(" ", value).split())
+    return flat[:TITLE_CHARS].replace("|", "\\|")
+
+
+def _code(value: str) -> str:
+    """Content for an inline code span: no backticks, pipes or whitespace."""
+    return re.sub(r"[`|\s]", "", value) or "-"
+
+
+@dataclass(frozen=True)
+class SignalPost:
+    feed: str
+    post_id: int
+    url: str | None
+    topic_title: str | None
+    created_at: str | None
+    author_staff: bool
+    keywords: tuple[str, ...]
+    canister_ids: tuple[str, ...]
+    ioc_canisters: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _strs(value: object) -> tuple[str, ...]:
+    return tuple(v for v in value if isinstance(v, str)) if isinstance(value, list) else ()
+
+
+def _post(payload: dict[str, Any], iocs: frozenset[str]) -> SignalPost:
+    canisters = _strs(payload.get("canister_ids"))
+    return SignalPost(
+        feed=str(payload.get("feed")),
+        post_id=int(payload.get("post_id", 0)),
+        url=payload.get("url") if isinstance(payload.get("url"), str) else None,
+        topic_title=payload.get("topic_title")
+        if isinstance(payload.get("topic_title"), str)
+        else None,
+        created_at=payload.get("created_at")
+        if isinstance(payload.get("created_at"), str)
+        else None,
+        author_staff=payload.get("author_staff") is True,
+        keywords=_strs(payload.get("keywords")),
+        canister_ids=canisters,
+        ioc_canisters=tuple(c for c in canisters if c in iocs),
+    )
+
+
+def recent_signals(session: Session, since: datetime) -> list[SignalPost]:
+    """Posts observed since ``since`` that name a keyword or an IOC canister, best first."""
+    rows = session.scalars(
+        select(EventRow)
+        .where(EventRow.kind == "signal.post_observed", EventRow.observed_at >= since)
+        .order_by(EventRow.observed_at, EventRow.id)
+    )
+    iocs = ioc_canisters(session)
+    latest = {row.subject_id: _post(row.payload, iocs) for row in rows}  # re-polls collapse
+    posts = [p for p in latest.values() if p.keywords or p.ioc_canisters]
+    posts.sort(key=lambda p: p.created_at or "", reverse=True)
+    posts.sort(key=lambda p: (not p.ioc_canisters, not p.author_staff))
+    return posts[:MAX_SIGNALS]
+
+
+def signals_section(posts: Sequence[SignalPost]) -> list[str]:
+    lines = ["", "## Signals (low authority)", "",
+             "Community forum posts naming a threat keyword or an IOC canister. Context only: "
+             "they never count as verification evidence.", "",
+             "| Posted | Feed | Topic | Keywords | Canisters | Author | Post |",
+             "|---|---|---|---|---|---|---|"]  # fmt: skip
+    for p in posts:
+        canisters = ", ".join(
+            f"**`{c}`** (IOC)" if c in p.ioc_canisters else f"`{c}`" for c in p.canister_ids
+        )
+        lines.append(
+            f"| {md_text((p.created_at or '-')[:16])} | {p.feed} | "
+            f"{md_text(p.topic_title or '-')} | "
+            f"{', '.join(p.keywords) or '-'} | {canisters or '-'} | "
+            f"{'staff' if p.author_staff else 'member'} | `{_code(p.url or '-')}` |"
+        )
+    return lines
