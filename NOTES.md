@@ -85,3 +85,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T13 verify command, exit 0; make check green)
 - Decisions: StubRule.score logs rule_stub (rule_id, event count) and returns None. H4 {cmc_topup, ioc_canister}, H5 {proposal_reference}, H6 {creation_burst, opaque_module}; H6 docstring labels the 1 Sept 2026 claim UNVERIFIED; H5 notes the takedown was probably a gateway block. REGISTRY id -> class, all_rules() in id order. Purity test scans rules/ imports (httpx, socket, sqlalchemy, core.http, core.ic_client, collectors) and clock reads.
 - Follow-ups: T14 verification + persistence of detections; real H4/H5/H6 once ledger, NNS and census collectors exist
+
+## 2026-10-15T08:21:24Z T14 attempt 1
+- Changed: core/evidence.py (two-signal rule), core/models.py (Detection validator + model_copy re-check), db/models.py (before_insert/update guard), verification/{state_machine,store}.py, cli/{pipeline,app}.py (verify command), tests/guardrails/test_two_signal.py (new, now locked), tests/unit/test_state_machine.py, .gitignore (*.db)
+- Verify: pass (T14 verify command, exit 0; make check green; make coverage ok)
+- Decisions: allowed C->V (>=2 refs, >=2 distinct source types), C->D (reason), V->D (explicit + reason); all else IllegalTransition; actor required; history entry {from,to,actor,reason,at,explicit}. Enforced in 3 layers because pydantic model_copy skips validators. DetectionRow has no explanation column: it is kept in the first status_history entry. Added *.db to .gitignore so the user's local Quickstart SQLite file is never committed.
+- Follow-ups: CLI score should persist via verification.store.save_candidate

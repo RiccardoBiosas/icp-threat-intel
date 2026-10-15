@@ -157,7 +157,7 @@
       "id": "T14",
       "type": "feat",
       "title": "verification state machine with two-signal constraint",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "candidate -> verified only with >= 2 evidence refs from different source types; candidate -> dismissed allowed; verified is terminal except an explicit audited dismissal.",
         "tests/guardrails/test_two_signal.py proves a single-signal detection and a two-refs-same-source detection cannot be verified."

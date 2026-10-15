@@ -4,12 +4,14 @@ These are not ORM rows: stages exchange these models so they can be mounted else
 Fields mirror the PLAN.md data model; persistence-only columns are left out.
 """
 
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from icp_threat_intel.core.enums import CanisterStatus, DetectionStatus, IocType, SourceType
+from icp_threat_intel.core.evidence import require_two_signals
 
 
 class _Frozen(BaseModel):
@@ -126,6 +128,19 @@ class Detection(_Frozen):
     rule_version: str = "1"
     id: int | None = None
     status_history: tuple[dict[str, Any], ...] = ()
+
+    @model_validator(mode="after")
+    def _two_signals_when_verified(self) -> "Detection":
+        if self.status is DetectionStatus.VERIFIED:
+            require_two_signals(self.evidence_refs)
+        return self
+
+    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        """``model_copy`` skips validators; re-check the two-signal rule on the copy."""
+        copied = super().model_copy(update=update, deep=deep)
+        if copied.status is DetectionStatus.VERIFIED:
+            require_two_signals(copied.evidence_refs)
+        return copied
 
 
 class Notification(_Frozen):

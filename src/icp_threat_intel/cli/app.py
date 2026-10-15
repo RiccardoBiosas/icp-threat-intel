@@ -9,6 +9,7 @@ from typing import Annotated, NoReturn
 import typer
 
 from icp_threat_intel.cli.db import db_app
+from icp_threat_intel.cli.pipeline import verify
 
 app = typer.Typer(
     name="icp-threat-intel",
@@ -18,6 +19,7 @@ app = typer.Typer(
 canister_app = typer.Typer(help="Inspect individual canisters.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
 app.add_typer(canister_app, name="canister")
+app.command("verify")(verify)
 
 
 def _not_implemented(command: str) -> NoReturn:
@@ -53,12 +55,6 @@ def enrich() -> None:
 def score() -> None:
     """Run detection rules H1-H6 and record candidate detections."""
     _not_implemented("score")
-
-
-@app.command()
-def verify() -> None:
-    """Move detections through the two-signal verification state machine."""
-    _not_implemented("verify")
 
 
 @app.command()

@@ -19,10 +19,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
 )
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from icp_threat_intel.core.enums import CanisterStatus, DetectionStatus, SourceType
+from icp_threat_intel.core.evidence import require_two_signals
 from icp_threat_intel.db.base import (
     Base,
     BigIntPk,
@@ -211,3 +213,11 @@ class DetectionRow(Base):
     verified_at: Mapped[datetime | None] = mapped_column(Timestamp)
     dismissed_at: Mapped[datetime | None] = mapped_column(Timestamp)
     dedup_key: Mapped[str] = mapped_column(String(64), unique=True)
+
+
+@event.listens_for(DetectionRow, "before_insert")
+@event.listens_for(DetectionRow, "before_update")
+def _two_signals_on_write(_mapper: Any, _connection: Any, row: DetectionRow) -> None:
+    """Database-side guard: a ``verified`` row needs two distinct source types."""
+    if row.status == DetectionStatus.VERIFIED:
+        require_two_signals(row.evidence_refs or [])
