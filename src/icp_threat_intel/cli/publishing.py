@@ -8,6 +8,7 @@ from typing import Annotated
 import typer
 from pydantic import ValidationError
 
+from icp_threat_intel.alerting.signals import MAX_SIGNALS
 from icp_threat_intel.core.models import Case
 from icp_threat_intel.publishing.case import GatedExporter
 from icp_threat_intel.publishing.gate import DisclosureRequired
@@ -71,11 +72,18 @@ def digest(
         bool,
         typer.Option("--signals-only", help="Only the signals feed (community forum posts)."),
     ] = False,
+    limit: Annotated[
+        int, typer.Option("--limit", min=1, help="Signals shown (best first; default 20).")
+    ] = MAX_SIGNALS,
+    show_all: Annotated[
+        bool, typer.Option("--all", help="Show every matched signal (overrides --limit).")
+    ] = False,
 ) -> None:
     """Build the digest (Markdown and JSON) from detections in the database.
 
     ``--signals-only`` writes a separate signals digest (``icp-threat-intel_signals_digest_*``)
-    with just the community forum posts.
+    with just the community forum posts. Signals are capped at ``--limit`` (default 20), or
+    not at all with ``--all``; the digest says how many matched posts it left out.
 
     Files are named after the period end in UTC, to the second, and existing files are
     never replaced unless ``--overwrite`` is given.
@@ -83,7 +91,7 @@ def digest(
     from sqlalchemy import select
 
     from icp_threat_intel.alerting.digest import DigestExists, build_digest, write_digest
-    from icp_threat_intel.alerting.signals import build_signals_digest, recent_signals
+    from icp_threat_intel.alerting.signals import build_signals_digest, matched_signals
     from icp_threat_intel.alerting.watch import latest_census, watched_canisters
     from icp_threat_intel.db.models import DetectionRow
     from icp_threat_intel.db.session import make_engine, make_session_factory
@@ -92,11 +100,13 @@ def digest(
     end = _now()
     start = end - timedelta(hours=hours)
     with make_session_factory(make_engine())() as session:
-        signals = recent_signals(session, start)
+        matched = matched_signals(session, start)
+        signals = matched if show_all else matched[:limit]
+        total = len(matched)
         if signals_only:
             detections, report = (
                 [],
-                build_signals_digest(signals, period_start=start, period_end=end),
+                build_signals_digest(signals, period_start=start, period_end=end, total=total),
             )
         else:
             rows = session.scalars(select(DetectionRow).where(DetectionRow.updated_at >= start))
@@ -108,15 +118,17 @@ def digest(
                 watched=watched_canisters(session),
                 census=latest_census(session),
                 signals=signals,
+                signals_total=total,
             )
     try:
         md, js = write_digest(report, out_dir, overwrite=overwrite)
     except DigestExists as exc:
         typer.echo(f"{exc}; nothing written (use --overwrite to replace it)", err=True)
         raise typer.Exit(code=1) from None
+    shown = f"{len(signals)} signal(s)"
+    if len(signals) < total:
+        shown = f"{len(signals)} of {total} signal(s)"
     if signals_only:
-        typer.echo(f"signals digest: {len(signals)} signal(s) -> {md}, {js}")
+        typer.echo(f"signals digest: {shown} -> {md}, {js}")
     else:
-        typer.echo(
-            f"digest: {len(detections)} detection(s), {len(signals)} signal(s) -> {md}, {js}"
-        )
+        typer.echo(f"digest: {len(detections)} detection(s), {shown} -> {md}, {js}")

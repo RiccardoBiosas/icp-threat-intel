@@ -46,7 +46,7 @@ def test_signals_digest_has_only_the_signals_section() -> None:
     assert "Signals: 1 matched post(s)" in digest.markdown
     for other in ("Detections", "## Watched canisters", "## Census"):
         assert other not in digest.markdown
-    assert set(digest.data) == {"period_start", "period_end", "signals"}
+    assert set(digest.data) == {"period_start", "period_end", "signals_total", "signals"}
     assert digest.data["signals"][0]["post_id"] == 7
 
 

@@ -75,6 +75,7 @@ def build_digest(
     watched: Sequence[WatchedCanister] = (),
     census: CensusSummary | None = None,
     signals: Sequence[SignalPost] = (),
+    signals_total: int | None = None,
 ) -> Notification:
     ordered = sorted(
         detections,
@@ -98,7 +99,7 @@ def build_digest(
     if census is not None:
         lines += _census_section(census)
     if signals:
-        lines += signals_section(signals)
+        lines += signals_section(signals, signals_total)
     data = {
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
@@ -109,6 +110,7 @@ def build_digest(
         "detections": [d.model_dump(mode="json") for d in ordered],
         "watched": [w.to_dict() for w in watched],
         "census": census.to_dict() if census is not None else None,
+        "signals_total": signals_total if signals_total is not None else len(signals),
         "signals": [p.to_dict() for p in signals],
     }
     return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)

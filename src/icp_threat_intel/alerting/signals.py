@@ -84,8 +84,8 @@ def _post(payload: dict[str, Any], iocs: frozenset[str]) -> SignalPost:
     )
 
 
-def recent_signals(session: Session, since: datetime) -> list[SignalPost]:
-    """Posts observed since ``since`` that name a keyword or an IOC canister, best first."""
+def matched_signals(session: Session, since: datetime) -> list[SignalPost]:
+    """Every post observed since ``since`` that names a keyword or an IOC, best first."""
     rows = session.scalars(
         select(EventRow)
         .where(EventRow.kind == "signal.post_observed", EventRow.observed_at >= since)
@@ -96,10 +96,29 @@ def recent_signals(session: Session, since: datetime) -> list[SignalPost]:
     posts = [p for p in latest.values() if p.keywords or p.names_ioc]
     posts.sort(key=lambda p: p.created_at or "", reverse=True)
     posts.sort(key=lambda p: (not p.names_ioc, not p.author_staff))
-    return posts[:MAX_SIGNALS]
+    return posts
 
 
-def signals_section(posts: Sequence[SignalPost]) -> list[str]:
+def recent_signals(
+    session: Session, since: datetime, limit: int | None = MAX_SIGNALS
+) -> list[SignalPost]:
+    """The first ``limit`` of ``matched_signals`` (all of them when ``limit`` is ``None``)."""
+    posts = matched_signals(session, since)
+    return posts if limit is None else posts[:limit]
+
+
+def left_out_note(shown: int, total: int | None) -> list[str]:
+    """A line saying how many matched posts the digest leaves out, if any."""
+    if total is None or total <= shown:
+        return []
+    return [
+        "",
+        f"Showing {shown} of {total} matched posts; the other {total - shown} are left out. "
+        "Run `digest --limit N` or `digest --all` for more, or query the database.",
+    ]
+
+
+def signals_section(posts: Sequence[SignalPost], total: int | None = None) -> list[str]:
     lines = ["", "## Signals (low authority)", "",
              "Community forum posts naming a threat keyword or a known IOC. Context only: "
              "they never count as verification evidence.", "",
@@ -116,11 +135,23 @@ def signals_section(posts: Sequence[SignalPost]) -> list[str]:
             f"{', '.join(p.keywords) or '-'} | {canisters or '-'} | "
             f"{'staff' if p.author_staff else 'member'} | `{_code(p.url or '-')}` |"
         )
-    return lines
+    return lines + left_out_note(len(posts), total)
+
+
+def _signals_line(shown: int, total: int | None) -> str:
+    if not shown and not total:
+        return "Signals: none"
+    if total is not None and total > shown:
+        return f"Signals: {total} matched post(s), {shown} shown"
+    return f"Signals: {shown} matched post(s)"
 
 
 def build_signals_digest(
-    posts: Sequence[SignalPost], *, period_start: datetime, period_end: datetime
+    posts: Sequence[SignalPost],
+    *,
+    period_start: datetime,
+    period_end: datetime,
+    total: int | None = None,
 ) -> Notification:
     """A digest with only the signals feed (``digest --signals-only``)."""
     title = f"icp-threat-intel signals digest {period_end.date().isoformat()}"
@@ -129,13 +160,14 @@ def build_signals_digest(
         "",
         f"Period: {period_start.isoformat()} to {period_end.isoformat()}",
         "",
-        f"Signals: {len(posts)} matched post(s)" if posts else "Signals: none",
+        _signals_line(len(posts), total),
     ]
     if posts:
-        lines += signals_section(posts)
+        lines += signals_section(posts, total)
     data = {
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
+        "signals_total": total if total is not None else len(posts),
         "signals": [p.to_dict() for p in posts],
     }
     return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)
