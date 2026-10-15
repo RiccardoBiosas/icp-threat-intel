@@ -76,10 +76,12 @@ def test_plain_client_refuses_algolia() -> None:
 
 
 def test_urls() -> None:
+    # "internet computer" is sent as an exact phrase: 309 hits instead of 31,902 (2026-10-16)
     assert hn_search_url("internet computer") == (
-        "https://hn.algolia.com/api/v1/search_by_date?query=internet+computer"
+        "https://hn.algolia.com/api/v1/search_by_date?query=%22internet+computer%22"
         "&tags=%28story%2Ccomment%29&hitsPerPage=100&page=0"
     )
+    assert "query=icp+canister&" in hn_search_url("icp canister")  # phrase finds nothing
     assert hn_search_url("dfinity", page=2, since=1700000000).endswith(
         "&page=2&numericFilters=created_at_i%3E1700000000"
     )

@@ -45,8 +45,8 @@ def _snap(body: bytes = BODY) -> RawSnapshot:
     return RawSnapshot(**fields)
 
 
-def test_parser_version_is_2() -> None:
-    assert SignalsFeedParser().parser_id == "signals_feed@2"
+def test_parser_version() -> None:
+    assert SignalsFeedParser().parser_id == "signals_feed@3"
 
 
 def test_without_terms_a_term_only_post_is_ignored() -> None:

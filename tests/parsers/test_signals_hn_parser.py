@@ -73,3 +73,36 @@ def test_failed_and_unusable_pages() -> None:
     assert err.kind == "signal.feed_polled" and err.payload["status"] == "error"
     (bad,) = SignalsFeedParser().parse(_snap(b"[]")).events
     assert bad.payload["status"] == "unusable_body"
+
+
+def test_parser_version_is_3() -> None:
+    assert SignalsFeedParser().parser_id == "signals_feed@3"
+
+
+def test_general_security_talk_without_icp_context_is_ignored() -> None:
+    events = SignalsFeedParser().parse(_snap(fx.OFF_TOPIC)).events
+    assert [e.kind for e in events] == ["signal.feed_polled"]
+    polled = events[0]
+    assert polled.payload["posts"] == 3
+    assert polled.payload["matched_posts"] == 0
+    assert polled.payload["out_of_context"] == 3
+
+
+def test_icp_story_title_gives_context_to_its_comments() -> None:
+    _, post = SignalsFeedParser().parse(_snap(fx.ICP_THREAD)).events
+    assert post.payload["keywords"] == ["malicious"]  # from the comment, not the title
+    assert post.payload["topic_title"] == "Internet Computer canisters used as malware C2"
+
+
+def test_forum_posts_are_not_gated() -> None:
+    from tests.collectors import _signals_feed_fixtures as forum
+
+    snap = _snap(forum.PAGE_2).model_copy(
+        update={
+            "request_meta": {"feed": "dfinity-forum", "request": "latest_posts"},
+            "source_name": "dfinity-forum",
+        }
+    )
+    events = SignalsFeedParser().parse(snap).events
+    assert [e.kind for e in events] == ["signal.feed_polled", "signal.post_observed"]
+    assert "out_of_context" not in events[0].payload

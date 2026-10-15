@@ -168,3 +168,22 @@ HN_QUERIES: tuple[str, ...] = (
     "canistersprawl",
     "teampcp",
 )
+# Sent as exact phrases ("..."): unquoted, Algolia matches the two words anywhere
+# ("internet computer": 31,902 hits unquoted, 309 quoted on 2026-10-16).
+HN_EXACT_PHRASES: frozenset[str] = frozenset({"internet computer"})
+
+# ICP context for sources that are not about ICP (Hacker News): an item counts only if its own
+# text or its story title clearly refers to the Internet Computer. Case matters for
+# "Internet Computer" (the proper noun, not "my internet computer"); bare "ICP" and
+# "canister" are too ambiguous on their own. Canister ids and IOC terms also count.
+_ICP_CONTEXT = (
+    re.compile(r"\bInternet Computer\b"),
+    re.compile(r"\bdfinity\b", re.IGNORECASE),
+    re.compile(r"\b(?:icp0\.io|ic0\.app|icp-api\.io)\b", re.IGNORECASE),
+    re.compile(r"\b(?:canisterworm|canistersprawl|teampcp|shai[- ]hulud)\b", re.IGNORECASE),
+)
+
+
+def has_icp_context(text: str) -> bool:
+    """True when ``text`` clearly refers to the Internet Computer."""
+    return any(pattern.search(text) for pattern in _ICP_CONTEXT)

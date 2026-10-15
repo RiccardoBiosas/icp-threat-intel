@@ -54,6 +54,17 @@ query), plus the shared client's per-host limit and backoff on 429/5xx.
 
 - `collectors/signals_hn.py`: `HackerNewsCollector(hn_http(contact))`. The host
   `hn.algolia.com` is allowed only through `hn_http` (`SafeHttpClient(extra_hosts=...)`).
+- **Exact phrases:** `internet computer` is sent in quotes. Unquoted, Algolia matches the
+  two words anywhere: on 2026-10-16 it returned 31,902 hits unquoted and 309 quoted.
+  `icp canister` stays unquoted (7 hits; the exact phrase has none).
+- **ICP-context gate (parser v3):** Hacker News is not about ICP, so an item counts only if
+  its own text or its story title clearly refers to ICP: "Internet Computer" with that
+  capitalisation, DFINITY, an ICP gateway host (`icp0.io`, `ic0.app`, `icp-api.io`), a
+  campaign name (CanisterWorm, CanisterSprawl, TeamPCP, Shai-Hulud), a canister id or an IOC
+  term. Bare "ICP" and "canister" are too ambiguous to count. Without ICP context, general
+  security words (`malicious`, `exploit`, `c2`, `supply_chain`, ...) never make a signal;
+  `signal.feed_polled` reports how many items were dropped (`out_of_context`). Keywords are
+  matched in the item's own text only, never in the story title. Forum sources are not gated.
 - **Queries:** Algolia logs searches. Only the curated `HN_QUERIES` in
   `parsers/signals_keywords.py` are sent (`internet computer`, `dfinity`, `icp canister`,
   `canisterworm`, `canistersprawl`, `teampcp`). Each carries ICP context, passes

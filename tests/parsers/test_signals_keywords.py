@@ -3,7 +3,13 @@
 import pytest
 
 from icp_threat_intel.core.enums import IocType
-from icp_threat_intel.parsers.signals_keywords import IocTerm, find_ioc_terms, ioc_term, keywords_in
+from icp_threat_intel.parsers.signals_keywords import (
+    IocTerm,
+    find_ioc_terms,
+    has_icp_context,
+    ioc_term,
+    keywords_in,
+)
 
 MATCHES = [
     ("malicious", "this package is malicious"),
@@ -125,3 +131,34 @@ def test_find_ioc_terms() -> None:
 )
 def test_find_ioc_terms_needs_whole_terms(text: str) -> None:
     assert find_ioc_terms(text, TERMS) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "they abused the Internet Computer as C2",
+        "Internet Computer Protocol canisters",
+        "a DFINITY engineer said",
+        "hosted on abcde.icp0.io",
+        "served from x.raw.ic0.app",
+        "CanisterWorm again",
+        "TeamPCP strikes",
+        "the shai-hulud worm",
+    ],
+)
+def test_icp_context(text: str) -> None:
+    assert has_icp_context(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "malware on my internet computer",  # lower case: the generic phrase
+        "the internet, computer viruses and a backdoor",
+        "a gas canister exploded",  # "canister" alone is not ICP
+        "ICPs and KPIs",
+        "malicious exploit dropper c2 supply-chain attack",
+    ],
+)
+def test_no_icp_context(text: str) -> None:
+    assert not has_icp_context(text)

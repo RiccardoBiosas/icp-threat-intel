@@ -12,6 +12,11 @@ newest first, then later pages up to ``pages`` while Algolia reports more (``nbP
 * **Data only.** Story and comment text arrives as HTML; ``html_to_text`` extracts the text
   with the standard-library parser (nothing is rendered or fetched) and links are never
   followed. Each hit becomes a ``ForumPost`` with its news.ycombinator.com permalink.
+* **Exact phrases.** ``HN_EXACT_PHRASES`` (``internet computer``) are sent in quotes;
+  unquoted, Algolia matches the two words anywhere (31,902 hits instead of 309).
+* **ICP context.** Hacker News is not about ICP, so the parser keeps an item only when its
+  text or story title clearly refers to ICP (``signals_keywords.has_icp_context``);
+  general security words alone never make a signal.
 * **Low authority.** Source type ``signals_feed``, ``sources`` row ``hackernews``.
 * No credentials. The host is allowed only through ``hn_http`` (``extra_hosts``).
 """
@@ -30,6 +35,7 @@ from icp_threat_intel.core.enums import SourceType
 from icp_threat_intel.core.http import SafeHttpClient
 from icp_threat_intel.core.models import RawFetch
 from icp_threat_intel.parsers.signals_keywords import (
+    HN_EXACT_PHRASES,
     HN_QUERIES,
     UnsafeSearchTerm,
     check_search_term,
@@ -48,8 +54,9 @@ def hn_http(contact: str, **kwargs: Any) -> SafeHttpClient:
 
 
 def hn_search_url(query: str, page: int = 0, since: int | None = None) -> str:
+    term = check_search_term(query)
     params: list[tuple[str, str | int]] = [
-        ("query", check_search_term(query)),
+        ("query", f'"{term}"' if term in HN_EXACT_PHRASES else term),
         ("tags", "(story,comment)"),
         ("hitsPerPage", HITS_PER_PAGE),
         ("page", page),

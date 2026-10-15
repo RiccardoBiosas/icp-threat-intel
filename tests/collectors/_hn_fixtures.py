@@ -63,3 +63,17 @@ PAGE = body(
     story(9103, "Internet Computer tooling update"),
 )
 EMPTY = body()
+
+
+# Gate cases: general security talk without ICP context must not become a signal.
+OFF_TOPIC = body(
+    comment(9301, "<p>Found malware on my internet computer, an exploit with a C2 dropper.</p>"),
+    story(9302, "Supply-chain attack hits npm", "A malicious backdoor in a popular package."),
+    comment(9303, "<p>The malicious payload used a dead drop.</p>", story_id=9400),
+)
+ICP_THREAD = body(
+    {
+        **comment(9304, "<p>Is this one malicious too?</p>", story_id=9401),
+        "story_title": "Internet Computer canisters used as malware C2",
+    },
+)

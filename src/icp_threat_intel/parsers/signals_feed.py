@@ -7,7 +7,9 @@
 * a search page (``request = search``) gives only ``signal.search_polled`` (subject
   ``<feed>:<term>``; hit and topic counts); posts come from the topic pages it led to;
 * Hacker News search pages (``request = hn_search``) are parsed like posts too, each hit with
-  its news.ycombinator.com permalink;
+  its news.ycombinator.com permalink, but only hits with ICP context count: the item or its
+  story title must name the Internet Computer, DFINITY, an ICP gateway host, a campaign, a
+  canister id or an IOC term (``out_of_context`` counts the rest);
 * latest-posts, topic and topic-posts pages are parsed alike, so a post seen both ways
   keeps one subject;
 * a post that names a canister id, a threat keyword or an IOC term gives
@@ -40,10 +42,17 @@ from icp_threat_intel.core.models import Event, ParseResult, RawSnapshot
 from icp_threat_intel.enrichment.ioc_join import CANISTER_ID_RE
 from icp_threat_intel.parsers.base import canister_event
 from icp_threat_intel.parsers.signals_blocklist import blocklist_events
-from icp_threat_intel.parsers.signals_keywords import IocTerm, find_ioc_terms, keywords_in
+from icp_threat_intel.parsers.signals_keywords import (
+    IocTerm,
+    find_ioc_terms,
+    has_icp_context,
+    keywords_in,
+)
 
 PARSER_NAME = "signals_feed"
 _TOPIC_REQUESTS = frozenset({"topic", "topic_posts"})
+# requests from sources that are not about ICP: items need ICP context to count
+_CONTEXT_GATED_REQUESTS = frozenset({"hn_search"})
 EXCERPT_CHARS = 280
 IC_HOST_RE = re.compile(r"\b(?:[a-z0-9-]+\.)*(?:icp0\.io|ic0\.app|icp-api\.io)\b", re.IGNORECASE)
 
@@ -64,7 +73,7 @@ def _post_url(origin: str, post: ForumPost) -> str | None:
 
 class SignalsFeedParser:
     source_type = SourceType.SIGNALS_FEED
-    version = "2"  # 2: tightened keyword list, IOC terms
+    version = "3"  # 2: tightened keyword list, IOC terms; 3: ICP-context gate for Hacker News
 
     def __init__(self, ioc_terms: Iterable[IocTerm] = ()) -> None:
         self._ioc_terms = tuple(sorted(set(ioc_terms), key=lambda t: (t.ioc_type, t.term)))
@@ -125,8 +134,12 @@ class SignalsFeedParser:
         parts = urlsplit(snapshot.url)
         origin = f"{parts.scheme}://{parts.netloc}"
         post_events: list[Event] = []
-        matched = 0
+        matched = out_of_context = 0
+        gated = request in _CONTEXT_GATED_REQUESTS
         for post in posts:
+            if gated and not self._in_icp_context(post):
+                out_of_context += 1
+                continue
             found = self._post_events(snapshot, feed, origin, post)
             matched += bool(found)
             post_events.extend(found)
@@ -139,6 +152,8 @@ class SignalsFeedParser:
             "newest_post_id": max(ids, default=None),
             "oldest_post_id": min(ids, default=None),
         }
+        if gated:
+            summary["out_of_context"] = out_of_context
         first = self._event(snapshot, "signal.feed_polled", subject, summary)
         return ParseResult(events=(first, *post_events))
 
@@ -164,6 +179,13 @@ class SignalsFeedParser:
             }
         subject = ("signal_search", f"{feed}:{term}")
         return self._event(snapshot, "signal.search_polled", subject, payload)
+
+    def _in_icp_context(self, post: ForumPost) -> bool:
+        """Sources not about ICP: the item or its story title must clearly refer to ICP."""
+        text = f"{post.raw}\n{post.topic_title or ''}"
+        if has_icp_context(text) or CANISTER_ID_RE.search(post.raw):
+            return True
+        return bool(find_ioc_terms(post.raw, self._ioc_terms))
 
     def _post_events(
         self, snapshot: RawSnapshot, feed: str, origin: str, post: ForumPost

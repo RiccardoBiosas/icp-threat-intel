@@ -17,7 +17,7 @@ from icp_threat_intel.core.ratelimit import HostRateLimiter
 from icp_threat_intel.db.base import Base
 from icp_threat_intel.db.models import EventRow, Ioc, RawSnapshotRow, Source
 from icp_threat_intel.db.session import make_engine, make_session_factory
-from icp_threat_intel.parsers.signals_keywords import HN_QUERIES
+from icp_threat_intel.parsers.signals_keywords import HN_EXACT_PHRASES, HN_QUERIES
 from tests.collectors import _hn_fixtures as fx
 
 runner = CliRunner()
@@ -57,7 +57,7 @@ def fast(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 
 def _algolia(request: httpx.Request) -> httpx.Response:
     q = request.url.params["query"]
-    body = fx.PAGE if q == "internet computer" else fx.EMPTY
+    body = fx.PAGE if q == '"internet computer"' else fx.EMPTY  # sent as an exact phrase
     return httpx.Response(200, content=body, headers={"content-type": "application/json"})
 
 
@@ -101,7 +101,7 @@ def test_collects_and_parses(db: str, algolia: respx.MockRouter, fast: list[floa
     assert "2 post(s) matched" in result.output
     assert "1 IOC canister reference(s)" in result.output
     sent = [c.request.url.params["query"] for c in algolia.calls]
-    assert sent == list(HN_QUERIES)
+    assert sent == [f'"{q}"' if q in HN_EXACT_PHRASES else q for q in HN_QUERIES]
     assert len(fast) == len(HN_QUERIES) - 1
     assert _count(db, RawSnapshotRow) == 6
     assert _count(db, EventRow, EventRow.kind == "signal.post_observed") == 2
