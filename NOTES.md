@@ -43,3 +43,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T06 verify command, exit 0; section 5 pre-commit checks clean; make check 194 passed)
 - Decisions: read_state uses manual cbor2 over core/http.py at /api/v3 (v2 deprecated), candid:service in its own request; CMC top-up derivation reproduced 7 DFINITY vectors and was re-computed independently. Raw gateway can upgrade a GET to an update call, so T08 pre-checks http_request by query. Non-IC hosts stay out of ALLOWLIST until each collector task adds them.
 - Follow-ups: T07 switch ic_client to v3 + pick a BLS lib; T08 upgrade pre-check and 451 denylisted signal; T09 use v4 listings, confirm fields; seed source_url from vendor-rss.md write-ups
+
+## 2026-10-15T07:04:47Z T07 attempt 1
+- Changed: core/ic_certificate.py (hash-tree lookup, reconstruct, LEB128 time), core/ic_client.py (read_state on /api/v3, IcHttpError keeps status+body), collectors/{read_state,candid}.py, parsers/read_state.py, tests/collectors/{_cassettes,test_read_state,test_candid,test_read_state_live}.py, tests/unit/test_ic_certificate.py, tests/cassettes/read_state_* (4), OPEN_QUESTIONS.md
+- Verify: pass (T07 verify command, exit 0; make check 242 passed; make coverage 90.85%)
+- Decisions: two requests per canister (state; candid alone), raw URL fragment #state/#candid keeps them apart in the raw store key; non-200 answers stored as evidence. Cassettes synthetic (no ICP_THREAT_INTEL_CONTACT; rebuild with python -m tests.collectors._cassettes); live re-record test is marker live. No BLS: every event says verification=unverified:no_bls. Candid types kept as normalised text; CanisterSnapshot.candid_methods stays empty, methods live in the canister.candid_read event payload.
+- Follow-ups: human sets ICP_THREAT_INTEL_CONTACT and runs make record; BLS backend + IC root key pin; T10 merges candid events into canister rows (candid_sha256, method names)

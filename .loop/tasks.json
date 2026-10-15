@@ -79,7 +79,7 @@
       "id": "T07",
       "type": "feat",
       "title": "read_state collector (module_hash, controllers, candid:service)",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "Collector built on the query-only IC client, written against docs/sources/read-state.md.",
         "Cassettes recorded once against both seed canisters via make record (or synthetic per SPEC D6), stored under tests/cassettes/read_state_*.",

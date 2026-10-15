@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "synthetic": true,
+    "source": "ic_read_state",
+    "canister_id": "cjn37-uyaaa-aaaac-qgnva-cai",
+    "request": "candid",
+    "paths": [
+      "metadata/candid:service"
+    ],
+    "method": "POST",
+    "url": "https://icp-api.io/api/v3/canister/cjn37-uyaaa-aaaac-qgnva-cai/read_state",
+    "recorded_at": "2026-10-15T00:00:00+00:00",
+    "note": "Synthetic: built from the IC interface spec (certification, read_state) because no ICP_THREAT_INTEL_CONTACT was configured for make record. Module hash, controllers, signature and delegation are placeholders, not observations of the canister. See OPEN_QUESTIONS.md (T07)."
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "content-type": "application/cbor"
+    },
+    "body_b64": "2dn3oWtjZXJ0aWZpY2F0ZVi/2dn3o2R0cmVlgwGDAkhjYW5pc3RlcoMCSgAAAAAAUDNqAQGBAIMCRHRpbWWCA0mAgKysjdyi7xhpc2lnbmF0dXJlWDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABqZGVsZWdhdGlvbqJpc3VibmV0X2lkWB19jdPt2/QXRUIA8syaoEYTPB6/7PJmGyQRdh+eAmtjZXJ0aWZpY2F0ZUlzeW50aGV0aWM="
+  }
+}

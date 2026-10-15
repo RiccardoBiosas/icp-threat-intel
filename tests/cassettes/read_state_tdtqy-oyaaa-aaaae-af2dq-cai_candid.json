@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "synthetic": true,
+    "source": "ic_read_state",
+    "canister_id": "tdtqy-oyaaa-aaaae-af2dq-cai",
+    "request": "candid",
+    "paths": [
+      "metadata/candid:service"
+    ],
+    "method": "POST",
+    "url": "https://icp-api.io/api/v3/canister/tdtqy-oyaaa-aaaae-af2dq-cai/read_state",
+    "recorded_at": "2026-10-15T00:00:00+00:00",
+    "note": "Synthetic: built from the IC interface spec (certification, read_state) because no ICP_THREAT_INTEL_CONTACT was configured for make record. Module hash, controllers, signature and delegation are placeholders, not observations of the canister. See OPEN_QUESTIONS.md (T07)."
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "content-type": "application/cbor"
+    },
+    "body_b64": "2dn3oWtjZXJ0aWZpY2F0ZVkCYNnZ96NkdHJlZYMBgwJIY2FuaXN0ZXKDAkoAAAAAAIAuhwEBgwJIbWV0YWRhdGGDAk5jYW5kaWQ6c2VydmljZYIDWQGCLy8gc3ludGhldGljIGludGVyZmFjZSBmb3IgdGVzdHMKdHlwZSBIdHRwUmVxdWVzdCA9IHJlY29yZCB7CiAgdXJsIDogdGV4dDsgbWV0aG9kIDogdGV4dDsgYm9keSA6IGJsb2I7IGhlYWRlcnMgOiB2ZWMgcmVjb3JkIHsgdGV4dDsgdGV4dCB9Cn07CnR5cGUgSHR0cFJlc3BvbnNlID0gcmVjb3JkIHsKICBib2R5IDogYmxvYjsgaGVhZGVycyA6IHZlYyByZWNvcmQgeyB0ZXh0OyB0ZXh0IH07IHN0YXR1c19jb2RlIDogbmF0MTYKfTsKc2VydmljZSA6IHsKICBnZXRfbGF0ZXN0X2xpbmsgOiAoKSAtPiAodGV4dCkgcXVlcnk7CiAgaHR0cF9yZXF1ZXN0IDogKEh0dHBSZXF1ZXN0KSAtPiAoSHR0cFJlc3BvbnNlKSBxdWVyeTsKICB1cGRhdGVfbGluayA6ICh0ZXh0KSAtPiAoKTsKfQqDAkR0aW1lggNJgICsrI3cou8YaXNpZ25hdHVyZVgwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAamRlbGVnYXRpb26iaXN1Ym5ldF9pZFgdfY3T7dv0F0VCAPLMmqBGEzwev+zyZhskEXYfngJrY2VydGlmaWNhdGVJc3ludGhldGlj"
+  }
+}

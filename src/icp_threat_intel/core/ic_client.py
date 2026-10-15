@@ -5,8 +5,8 @@ over the shared allowlisted HTTP client. No method exists that changes canister 
 installs code, creates canisters or moves ICP or cycles, and the envelope builder rejects
 every other request type.
 
-The read_state certificate is returned as received. Certificate verification and hash-tree
-lookup arrive with the read_state collector (T07).
+The read_state certificate is returned as received; ``core/ic_certificate.py`` decodes it.
+read_state uses the v3 endpoint (v2 is deprecated, see docs/sources/read-state.md).
 """
 
 import re
@@ -49,7 +49,12 @@ class IcReject(Exception):
 
 
 class IcHttpError(Exception):
-    """The boundary node answered with a non-200 status."""
+    """The boundary node answered with a non-200 status (or an unusable body)."""
+
+    def __init__(self, message: str, *, status_code: int | None = None, body: bytes = b"") -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.body = body
 
 
 def _method_words(method: str) -> set[str]:
@@ -88,7 +93,7 @@ class IcClient:
             canister_id=canister_id,
             fields={"paths": [[bytes(label) for label in path] for path in paths]},
         )
-        reply = self._post(canister_id, "read_state", envelope)
+        reply = self._post(canister_id, "read_state", envelope, version="v3")
         return bytes(reply["certificate"])
 
     @staticmethod
@@ -96,13 +101,19 @@ class IcClient:
         if principal_from_text(canister_id) == b"":
             raise IcRequestRefused("the management canister is not a permitted target")
 
-    def _post(self, canister_id: str, endpoint: str, envelope: dict[str, Any]) -> dict[str, Any]:
-        url = f"{self._boundary}/api/v2/canister/{canister_id}/{endpoint}"
+    def _post(
+        self, canister_id: str, endpoint: str, envelope: dict[str, Any], *, version: str = "v2"
+    ) -> dict[str, Any]:
+        url = f"{self._boundary}/api/{version}/canister/{canister_id}/{endpoint}"
         response: FetchResponse = self._http.post(
             url, content=encode_cbor(envelope), headers=_CBOR_HEADERS
         )
         if response.status_code != 200:
-            raise IcHttpError(f"{endpoint} returned HTTP {response.status_code}")
+            raise IcHttpError(
+                f"{endpoint} returned HTTP {response.status_code}",
+                status_code=response.status_code,
+                body=response.body,
+            )
         decoded = decode_cbor(response.body)
         if not isinstance(decoded, Mapping):
             raise IcHttpError(f"{endpoint} returned a non-map CBOR body")
