@@ -15,6 +15,7 @@ class SourceType(StrEnum):
     URLHAUS = "urlhaus"
     GITHUB_ADVISORIES = "github_advisories"
     VENDOR_RSS = "vendor_rss"
+    SIGNALS_FEED = "signals_feed"
 
 
 class DetectionStatus(StrEnum):

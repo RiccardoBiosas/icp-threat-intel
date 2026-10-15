@@ -38,13 +38,13 @@ flowchart LR
 
 | Stage | Package | Notes |
 |---|---|---|
-| Collect | `collectors/` | `read_state.py`, `raw_gateway.py`, `dashboard.py`; every response, errors included, becomes a `RawFetch`. |
+| Collect | `collectors/` | `read_state.py`, `raw_gateway.py`, `dashboard.py`, `signals_feed.py` (community forums, low authority); every response, errors included, becomes a `RawFetch`. |
 | Store | `raw_store/` | Redaction (guardrail 5) before insert; idempotent on (source, url, sha256). Parsers re-run over history. |
 | Parse | `parsers/` | One parser per source; deterministic dedup keys; `parsers/ingest.py` persists events and canister snapshots. |
 | Enrich | `enrichment/` | Source reliability (0-100, `core/trust.py`) applied at ingest; IOC membership from the `iocs` table. LLM and Wasm hooks are documented, not implemented. |
 | Census | `census/` | Walks subnets through the Dashboard API, records each canister, diffs against the previous run. Partial walks never report removals. |
 | Score | `rules/` | H1 dead-drop C2, H2 lifecycle, H3 supply chain, H7 exfiltration store (extension); H4-H6 registered stubs. One detection per rule and subject; new evidence is merged. |
-| Verify | `verification/` | `candidate → verified` only with evidence from ≥2 source types; audited dismissal. |
+| Verify | `verification/` | `candidate → verified` only with evidence from ≥2 source types (signal sources such as forums do not count); audited dismissal. |
 | Alert | `alerting/` | Daily digest (Markdown + JSON), immediate alerts for verified detections. |
 | Publish | `publishing/` | Disclosure gate first; ThreatFox file is for human review, never sent. |
 

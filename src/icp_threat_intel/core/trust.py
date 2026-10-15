@@ -13,6 +13,8 @@ Defaults, from most to least direct evidence (rationale in OPEN_QUESTIONS.md, T1
 * Raw gateway bodies, uncertified and canister-controlled: 70.
 * Third-party IOC feeds (ThreatFox, URLhaus): 65.
 * Vendor blog feeds, prose reporting: 60.
+* Signals feeds (community forums), anyone can post: 40. They never count towards the
+  two-signal rule (``core/evidence.py``).
 """
 
 import math
@@ -32,6 +34,7 @@ DEFAULT_RELIABILITY: Mapping[SourceType, int] = {
     SourceType.THREATFOX: 65,
     SourceType.URLHAUS: 65,
     SourceType.VENDOR_RSS: 60,
+    SourceType.SIGNALS_FEED: 40,
 }
 
 

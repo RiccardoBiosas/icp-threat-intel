@@ -25,6 +25,7 @@ from icp_threat_intel.parsers.base import dedup_key
 from icp_threat_intel.parsers.dashboard import DashboardParser
 from icp_threat_intel.parsers.raw_gateway import RawGatewayParser
 from icp_threat_intel.parsers.read_state import ReadStateParser
+from icp_threat_intel.parsers.signals_feed import SignalsFeedParser
 
 log = structlog.get_logger(__name__)
 
@@ -32,6 +33,7 @@ PARSERS: Mapping[SourceType, Parser] = {
     SourceType.IC_READ_STATE: ReadStateParser(),
     SourceType.RAW_GATEWAY: RawGatewayParser(),
     SourceType.DASHBOARD_API: DashboardParser(),
+    SourceType.SIGNALS_FEED: SignalsFeedParser(),
 }
 
 
