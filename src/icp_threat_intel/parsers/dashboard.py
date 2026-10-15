@@ -49,6 +49,7 @@ class DashboardParser:
         if found is None or found.canister_id != canister_id:
             return self._event(snapshot, kind, canister_id, {"status": "unusable_body"})
         fields = asdict(found)
+        fields["canister_status"] = fields.pop("status")  # "status" is the parse status
         if found.controllers is not None:
             fields["controllers"] = list(found.controllers)
         result = self._event(snapshot, kind, canister_id, {"status": "ok", **fields})

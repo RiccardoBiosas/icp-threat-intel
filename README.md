@@ -55,7 +55,7 @@ deactivate
 Without uv, a plain venv also works (versions are then not pinned by the lock file):
 
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
+    python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e . pytest pytest-cov respx ruff mypy types-PyYAML
 ```
 

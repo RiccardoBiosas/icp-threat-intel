@@ -70,5 +70,12 @@ def test_canister_inspect_accepts_offline_flag() -> None:
 
 
 def test_stub_exits_two() -> None:
+    result = runner.invoke(app, ["digest"])
+    assert result.exit_code == 2
+
+
+def test_census_without_contact_exits_two(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ICP_THREAT_INTEL_CONTACT", raising=False)
     result = runner.invoke(app, ["census"])
     assert result.exit_code == 2
+    assert "ICP_THREAT_INTEL_CONTACT" in result.output

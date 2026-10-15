@@ -91,3 +91,10 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T14 verify command, exit 0; make check green; make coverage ok)
 - Decisions: allowed C->V (>=2 refs, >=2 distinct source types), C->D (reason), V->D (explicit + reason); all else IllegalTransition; actor required; history entry {from,to,actor,reason,at,explicit}. Enforced in 3 layers because pydantic model_copy skips validators. DetectionRow has no explanation column: it is kept in the first status_history entry. Added *.db to .gitignore so the user's local Quickstart SQLite file is never committed.
 - Follow-ups: CLI score should persist via verification.store.save_candidate
+
+## 2026-10-15T08:42:29Z T15 attempt 1
+- Changed: census/{diff,walker,run}.py, cli/{canister,pipeline,app}.py (census + canister inspect), raw_store/cassettes.py, collectors/dashboard.py (canister_from_dict, status, list URLs), parsers/dashboard.py (canister_status key: fixes payload "status" collision), tests/unit/{test_census,test_smoke}.py, OPEN_QUESTIONS.md
+- Verify: pass (T15 verify command, exit 0; make check 447 passed; coverage 96.95%)
+- Decisions: walker uses v4 lists, cursor paging, ceiling, per-subnet completeness; every page stored raw. Diff skips unknown-on-either-side fields; removals only for subnets complete in both runs. census.canister_changed payload {run_id, changes:{field:{from,to}}} (H2 contract). inspect --offline: raw store first (never creates a sqlite file, tolerates missing tables), else cassettes rebuilt into RawSnapshots and parsed in memory; live inspect not implemented (exit 2). census CLI needs ICP_THREAT_INTEL_CONTACT; smoke stub test moved to digest.
+- Also committed: user's uncommitted README.md edit (4-space indent in the pip fallback block), swept in by git add -A per section 5.
+- Follow-ups: live inspect (collect then render); census deep reads (PLAN step 5) via read_state collector

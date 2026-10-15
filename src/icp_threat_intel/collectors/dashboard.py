@@ -28,6 +28,14 @@ from icp_threat_intel.core.models import RawFetch
 BASE_URL = "https://ic-api.internetcomputer.org"
 
 
+def canisters_list_url() -> str:
+    return f"{BASE_URL}/api/v4/canisters"
+
+
+def subnets_list_url() -> str:
+    return f"{BASE_URL}/api/v4/subnets"
+
+
 def canister_url(canister_id: str) -> str:
     return f"{BASE_URL}/api/v3/canisters/{canister_id}"
 
@@ -46,6 +54,7 @@ class DashboardCanister:
     language: str | None
     name: str | None
     updated_at: str | None
+    status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,8 +106,11 @@ def _principal(value: object) -> str | None:
 def extract_canister(body: bytes) -> DashboardCanister | None:
     """Map a ``/api/v3/canisters/{id}`` body to known fields, or ``None`` if unusable."""
     data = _json(body)
-    if data is None:
-        return None
+    return None if data is None else canister_from_dict(data)
+
+
+def canister_from_dict(data: dict[str, Any]) -> DashboardCanister | None:
+    """Map one canister object (detail body or list item) to known fields."""
     canister_id = _principal(data.get("canister_id"))
     if canister_id is None:
         return None
@@ -110,6 +122,7 @@ def extract_canister(body: bytes) -> DashboardCanister | None:
     module_hash = _str(data, "module_hash")
     if module_hash is not None:
         module_hash = module_hash.lower().removeprefix("0x")
+    status = _str(data, "status")
     return DashboardCanister(
         canister_id=canister_id,
         subnet_id=_principal(data.get("subnet_id")),
@@ -119,6 +132,7 @@ def extract_canister(body: bytes) -> DashboardCanister | None:
         language=_str(data, "language"),
         name=_str(data, "name"),
         updated_at=_str(data, "updated_at"),
+        status=status.lower() if status else None,
     )
 
 

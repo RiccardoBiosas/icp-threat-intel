@@ -1,4 +1,4 @@
-"""Pipeline CLI commands built so far: ``verify``."""
+"""Pipeline CLI commands built so far: ``census`` and ``verify``."""
 
 from typing import Annotated
 
@@ -35,3 +35,34 @@ def verify(
         typer.echo(f"refused: {exc}", err=True)
         raise typer.Exit(code=1) from None
     typer.echo(f"detection {detection_id}: {updated.status_history[-1]['from']} -> {to.value}")
+
+
+def census(
+    ceiling: Annotated[
+        int | None, typer.Option("--ceiling", help="Max canisters (default from settings).")
+    ] = None,
+) -> None:
+    """Walk subnets via the Dashboard API and diff against the previous run."""
+    from icp_threat_intel.census.run import run_census
+    from icp_threat_intel.census.walker import CensusWalker
+    from icp_threat_intel.core.config import Settings
+    from icp_threat_intel.core.http import SafeHttpClient
+    from icp_threat_intel.db.session import make_engine, make_session_factory
+    from icp_threat_intel.raw_store.store import SqlRawStore
+
+    settings = Settings.from_env()
+    if not settings.contact:
+        typer.echo("census needs ICP_THREAT_INTEL_CONTACT (sent in the User-Agent)", err=True)
+        raise typer.Exit(code=2)
+    sessions = make_session_factory(make_engine())
+    with SafeHttpClient(settings.contact) as http:
+        walker = CensusWalker(
+            http, SqlRawStore(sessions), ceiling=ceiling or settings.census_max_canisters
+        )
+        walk, diff = run_census(sessions, walker)
+    typer.echo(
+        f"census {walk.run_id}: {len(walk.states)} canisters, +{len(diff.added)} "
+        f"-{len(diff.removed)} ~{len(diff.changed)}, complete subnets "
+        f"{len(walk.complete_subnets)}, incomplete {len(walk.incomplete_subnets)}, "
+        f"ceiling hit: {walk.ceiling_hit}"
+    )

@@ -168,7 +168,7 @@
       "id": "T15",
       "type": "feat",
       "title": "census package and canister inspect command",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "Census walks subnets via the Dashboard API client, records canister state and diffs against the previous run (added, removed, changed fields).",
         "`icp-threat-intel canister inspect <id> --offline` prints status, controllers, module hash, Candid methods and a raw-body summary from cassettes or the raw store."
