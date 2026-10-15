@@ -10,7 +10,7 @@ import typer
 
 from icp_threat_intel.cli.canister import canister_app
 from icp_threat_intel.cli.db import db_app
-from icp_threat_intel.cli.pipeline import census, verify
+from icp_threat_intel.cli.pipeline import census, enrich, parse, score, verify
 from icp_threat_intel.cli.publishing import digest, publish
 
 app = typer.Typer(
@@ -20,6 +20,9 @@ app = typer.Typer(
 )
 app.add_typer(db_app, name="db")
 app.add_typer(canister_app, name="canister")
+app.command("parse")(parse)
+app.command("enrich")(enrich)
+app.command("score")(score)
 app.command("verify")(verify)
 app.command("census")(census)
 app.command("digest")(digest)
@@ -35,24 +38,6 @@ def _not_implemented(command: str) -> NoReturn:
 def collect() -> None:
     """Run collectors and store every response in the raw store."""
     _not_implemented("collect")
-
-
-@app.command()
-def parse() -> None:
-    """Parse raw snapshots into normalized events."""
-    _not_implemented("parse")
-
-
-@app.command()
-def enrich() -> None:
-    """Apply source trust weights and IOC membership to events."""
-    _not_implemented("enrich")
-
-
-@app.command()
-def score() -> None:
-    """Run detection rules H1-H6 and record candidate detections."""
-    _not_implemented("score")
 
 
 def main() -> None:

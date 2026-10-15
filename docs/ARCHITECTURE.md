@@ -28,7 +28,7 @@ flowchart LR
     PAR -->|events, canister snapshots| ENR[Enrichment<br/>trust weight, IOC join]
     ENR --> DB[(Postgres<br/>events, canisters,<br/>canister_snapshots)]
     CEN[Census<br/>walk + diff] --> DB
-    DB --> RUL[Rules H1-H6<br/>pure, candidates only]
+    DB --> RUL[Rules H1-H7<br/>pure, candidates only]
     RUL --> VER{Verification<br/>two different<br/>source types?}
     VER -->|verified| ALR[Alerting<br/>digest, stdout, webhook]
     VER -->|verified| GATE{disclosed_at set?}
@@ -43,7 +43,7 @@ flowchart LR
 | Parse | `parsers/` | One parser per source; deterministic dedup keys; `parsers/ingest.py` persists events and canister snapshots. |
 | Enrich | `enrichment/` | Source reliability (0-100, `core/trust.py`) applied at ingest; IOC membership from the `iocs` table. LLM and Wasm hooks are documented, not implemented. |
 | Census | `census/` | Walks subnets through the Dashboard API, records each canister, diffs against the previous run. Partial walks never report removals. |
-| Score | `rules/` | H1 dead-drop C2, H2 lifecycle, H3 supply chain; H4-H6 registered stubs. |
+| Score | `rules/` | H1 dead-drop C2, H2 lifecycle, H3 supply chain, H7 exfiltration store (extension); H4-H6 registered stubs. One detection per rule and subject; new evidence is merged. |
 | Verify | `verification/` | `candidate → verified` only with evidence from ≥2 source types; audited dismissal. |
 | Alert | `alerting/` | Daily digest (Markdown + JSON), immediate alerts for verified detections. |
 | Publish | `publishing/` | Disclosure gate first; ThreatFox file is for human review, never sent. |
@@ -75,6 +75,7 @@ Each rule is built from those observables only:
 | **H3 supply chain** | Looks **outside the IC**: package install hooks, `.pth` lines and decoded strings that reference a canister ID, an IC gateway host or host indicators (`/tmp/pglog`, `pgmon.service`). The malicious code is in the package, which we can read, not in the canister. |
 | **H4 cycles funding** (stub) | Follows **money, not code**: ICP ledger transfers to the Cycles Minting Canister with the IOC canister's top-up subaccount (`TPUP` memo). Funding accounts link canisters whose code we cannot compare. |
 | **H5 governance** (stub) | Uses **public governance records**: NNS proposals naming IOC canisters or subnets, and gateway `451 denylisted` answers, to measure time-to-action. |
+| **H7 exfiltration store** (extension beyond SPEC) | Reads *behaviour from the interface* like H1: an update method that writes a blob/text payload plus query read-backs (`store`/`list`/`get`), confirmed by the canister answering HTTP. The CanisterSprawl shape. |
 | **H6 mass creation** (stub, unverified hypothesis) | Uses **hash equality and absence**: many canisters created in a burst on one subnet or controller, with no public Candid and identical or tiny module hashes. Identical hashes prove identical code without reading it. |
 
 Two further consequences:

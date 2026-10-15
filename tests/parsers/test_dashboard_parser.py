@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from icp_threat_intel.core.enums import SourceType
-from icp_threat_intel.core.models import RawSnapshot
+from icp_threat_intel.core.models import ParseResult, RawSnapshot
 from icp_threat_intel.parsers.dashboard import DashboardParser
 from tests.collectors import _dashboard_cassettes as dash
 from tests.collectors._cassettes import SEED_CANISTERS
@@ -62,3 +62,12 @@ def test_controllers_unknown_stays_none() -> None:
         DashboardParser().parse(_snap(f'{{"canister_id": "{CJN37}"}}'.encode())).canister_snapshots
     )
     assert canister.controllers is None and canister.subnet is None
+
+
+def test_census_pages_are_skipped() -> None:
+    """Census list pages carry no canister id; ``census`` itself turns them into events."""
+    for request in ("census_subnets", "census_canisters"):
+        snap = _snap(b'{"data": []}', request=request).model_copy(
+            update={"request_meta": {"request": request, "census_run_id": "r"}}
+        )
+        assert DashboardParser().parse(snap) == ParseResult()

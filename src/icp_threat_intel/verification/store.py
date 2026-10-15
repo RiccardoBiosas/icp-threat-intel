@@ -2,10 +2,12 @@
 
 import hashlib
 import json
-from datetime import datetime
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from icp_threat_intel.core.enums import DetectionStatus
 from icp_threat_intel.core.models import Detection, EvidenceRef
@@ -45,14 +47,58 @@ def to_model(row: DetectionRow) -> Detection:
     )
 
 
-def save_candidate(session: Session, detection: Detection) -> tuple[int, bool]:
-    """Insert a candidate detection unless an identical one exists; (id, created)."""
+Outcome = Literal["created", "updated", "unchanged"]
+
+
+def _ref_key(ref: Mapping[str, Any]) -> tuple[str, int, str]:
+    return (str(ref["ref_type"]), int(ref["id"]), str(ref["source_type"]))
+
+
+def _merge(row: DetectionRow, detection: Detection, refs: list[dict[str, Any]]) -> Outcome:
+    known = {_ref_key(r) for r in row.evidence_refs}
+    added = [r for r in refs if _ref_key(r) not in known]
+    if not added:
+        return "unchanged"
+    row.evidence_refs = [*row.evidence_refs, *added]
+    row.score = max(row.score, detection.score)
+    row.weighted_confidence = max(row.weighted_confidence, detection.weighted_confidence)
+    row.signals = sorted(set(row.signals) | detection.signals)
+    entry = {"event": "evidence_added", "added": added, "at": datetime.now(UTC).isoformat()}
+    row.status_history = [*row.status_history, entry]
+    session = object_session(row)
+    if session is not None:
+        session.flush()
+    return "updated"
+
+
+def record_detection(session: Session, detection: Detection) -> tuple[int, Outcome]:
+    """Store a rule's candidate, keeping one detection per rule and subject.
+
+    * An open (candidate or verified) detection for the same rule and subject absorbs the
+      new evidence refs; its status never changes here. Returns ``"updated"``, or
+      ``"unchanged"`` when every ref was already known.
+    * If only dismissed detections exist, the new one is ignored unless it brings
+      evidence none of them had; then it becomes a new candidate (``"created"``).
+    """
     if detection.status is not DetectionStatus.CANDIDATE:
         raise ValueError("rules only emit candidates; use transition() to change status")
-    key = detection_key(detection)
-    existing = session.scalar(select(DetectionRow.id).where(DetectionRow.dedup_key == key))
-    if existing is not None:
-        return existing, False
+    rows = session.scalars(
+        select(DetectionRow)
+        .where(
+            DetectionRow.rule_id == detection.rule_id,
+            DetectionRow.subject_type == detection.subject_type,
+            DetectionRow.subject_id == detection.subject_id,
+        )
+        .order_by(DetectionRow.id)
+    ).all()
+    refs = [r.model_dump(mode="json") for r in detection.evidence_refs]
+    live = [r for r in rows if r.status is not DetectionStatus.DISMISSED]
+    if live:
+        return live[0].id, _merge(live[0], detection, refs)
+    if rows:
+        dismissed = {_ref_key(r) for row in rows for r in row.evidence_refs}
+        if all(_ref_key(r) in dismissed for r in refs):
+            return rows[-1].id, "unchanged"
     row = DetectionRow(
         rule_id=detection.rule_id,
         rule_version=detection.rule_version,
@@ -62,14 +108,20 @@ def save_candidate(session: Session, detection: Detection) -> tuple[int, bool]:
         score=detection.score,
         weighted_confidence=detection.weighted_confidence,
         signals=sorted(detection.signals),
-        evidence_refs=[r.model_dump(mode="json") for r in detection.evidence_refs],
+        evidence_refs=refs,
         status=DetectionStatus.CANDIDATE,
         status_history=[{"to": "candidate", "explanation": detection.explanation}],
-        dedup_key=key,
+        dedup_key=detection_key(detection),
     )
     session.add(row)
     session.flush()
-    return row.id, True
+    return row.id, "created"
+
+
+def save_candidate(session: Session, detection: Detection) -> tuple[int, bool]:
+    """``record_detection`` reduced to (id, created) for callers that only need that."""
+    det_id, outcome = record_detection(session, detection)
+    return det_id, outcome == "created"
 
 
 def transition_row(
