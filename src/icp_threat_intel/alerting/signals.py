@@ -117,8 +117,17 @@ class SignalFilter:
 
     @classmethod
     def create(cls, keywords: Iterable[str] = (), ioc_only: bool = False) -> "SignalFilter":
-        """Validate labels against ``signals_keywords.KEYWORDS``; refuse unknown ones."""
-        labels = tuple(sorted({k.strip().lower() for k in keywords}))
+        """Validate labels against ``signals_keywords.KEYWORDS``; refuse unknown ones.
+
+        Each entry may hold several comma-separated labels (``"phishing,drainer"``); entries
+        from repeated ``--keyword`` flags are combined. Empty pieces are ignored, but entries
+        with no label at all are refused.
+        """
+        entries = list(keywords)
+        pieces = (piece.strip().lower() for entry in entries for piece in entry.split(","))
+        labels = tuple(sorted({p for p in pieces if p}))
+        if entries and not labels:
+            raise ValueError(f"no keyword labels given; known: {', '.join(sorted(KEYWORDS))}")
         unknown = [k for k in labels if k not in KEYWORDS]
         if unknown:
             raise ValueError(

@@ -80,7 +80,11 @@ def digest(
     ] = False,
     keyword: Annotated[
         list[str] | None,
-        typer.Option("--keyword", help="Only signals with this keyword label (repeatable)."),
+        typer.Option(
+            "--keyword",
+            help="Only signals with any of these keyword labels, comma-separated "
+            "(e.g. phishing,drainer); the flag can also be repeated.",
+        ),
     ] = None,
     ioc_only: Annotated[
         bool, typer.Option("--ioc-only", help="Only signals naming an IOC canister or value.")
@@ -91,8 +95,8 @@ def digest(
     ``--signals-only`` writes a separate signals digest (``icp-threat-intel_signals_digest_*``)
     with just the community forum posts. Signals are capped at ``--limit`` (default 20), or
     not at all with ``--all``; the digest says how many matched posts it left out.
-    ``--keyword`` (any of the given labels) and ``--ioc-only`` narrow the signals first; the
-    filter is recorded in the digest.
+    ``--keyword`` (any of the given labels, comma-separated or repeated) and ``--ioc-only``
+    narrow the signals first; the filter is recorded in the digest.
 
     Files are named after the period end in UTC, to the second, and existing files are
     never replaced unless ``--overwrite`` is given.

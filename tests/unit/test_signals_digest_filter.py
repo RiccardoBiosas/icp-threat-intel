@@ -191,3 +191,40 @@ def test_cli_unknown_keyword_exits_two_and_writes_nothing(
     assert code == 2
     assert "unknown keyword label" in output and "phishing" in output
     assert md == ""
+
+
+def test_comma_separated_labels() -> None:
+    f = SignalFilter.create(keywords=["phishing,drainer", " scam , stolen "])
+    assert f.keywords == ("drainer", "phishing", "scam", "stolen")
+
+
+def test_empty_pieces_are_ignored() -> None:
+    assert SignalFilter.create(keywords=["phishing,,", ","]).keywords == ("phishing",)
+
+
+def test_only_empty_labels_is_refused() -> None:
+    with pytest.raises(ValueError, match="no keyword labels"):
+        SignalFilter.create(keywords=[" , "])
+
+
+def test_unknown_label_inside_a_list_is_refused() -> None:
+    with pytest.raises(ValueError, match="phising"):
+        SignalFilter.create(keywords=["scam,phising"])
+
+
+def test_cli_comma_separated_keyword(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    code, output, md = _run(tmp_path, monkeypatch, "--keyword", "phishing,drainer")
+    assert code == 0, output
+    assert "signals digest: 2 signal(s)" in output
+    assert "Filter: keywords drainer, phishing" in md
+
+
+def test_cli_comma_list_and_repeated_flags_combine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    code, output, md = _run(
+        tmp_path, monkeypatch, "--keyword", "phishing,drainer", "--keyword", "scam"
+    )
+    assert code == 0, output
+    assert "signals digest: 3 signal(s)" in output
+    assert "Filter: keywords drainer, phishing, scam" in md
