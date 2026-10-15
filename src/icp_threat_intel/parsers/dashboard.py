@@ -5,7 +5,8 @@
 * a subnet body gives ``canister.subnet_observed`` for the canister that led to it.
 
 Non-200 answers and unusable bodies still produce an event with a status, so a missing
-canister is evidence rather than a silent gap.
+canister is evidence rather than a silent gap. Census list pages (``census_*`` requests) are
+skipped: ``census/run.py`` already turns them into events and canister snapshots.
 """
 
 from dataclasses import asdict
@@ -29,6 +30,8 @@ class DashboardParser:
 
     def parse(self, snapshot: RawSnapshot) -> ParseResult:
         meta = snapshot.request_meta
+        if str(meta.get("request", "")).startswith("census_"):
+            return ParseResult()  # census pages are turned into events by ``census`` itself
         canister_id = str(meta["canister_id"])
         if meta.get("request") == "subnet":
             return self._subnet(snapshot, canister_id)
