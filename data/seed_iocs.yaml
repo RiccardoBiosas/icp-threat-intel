@@ -1,11 +1,14 @@
-# Seed IOCs: the verified facts from SPEC.md section 3, and nothing else.
+# Seed IOCs: the verified facts from SPEC.md section 3, plus the vendor write-up URLs for the
+# two campaigns.
 # Loaded by `icp-threat-intel db seed` (`--dry-run` prints what would load).
 #
 # Provenance rules:
 # - Each IOC carries its original publisher's source type (threatfox, vendor_rss), never
 #   a separate "seed" type, so the seed cannot count as an extra signal (OPEN_QUESTIONS T01).
-# - SPEC names the CanisterWorm/CanisterSprawl write-ups' publishers but gives no URLs, so
-#   those `source_url` values are empty rather than guessed (OPEN_QUESTIONS T05).
+# - SPEC names the CanisterWorm/CanisterSprawl write-ups' publishers but gives no URLs. The URLs
+#   below come from docs/sources/vendor-rss.md ("Campaign write-ups"), each fetched with HTTP 200
+#   on 2026-10-15; nothing is guessed (OPEN_QUESTIONS T05, T18). A canister IOC points at a
+#   write-up that names the canister ID verbatim.
 # - The unverified 1 September 2026 claim (hypothesis H6) is not an IOC and is not seeded.
 
 version: 1
@@ -31,7 +34,11 @@ campaigns:
       and 66+ packages. Governance took about 26 hours after disclosure to disable the
       canister; a disabled canister can be re-enabled.
     publishers: [Cloud Security Alliance, Aikido, JFrog, Socket]
-    source_urls: []
+    source_urls:
+      - https://www.aikido.dev/blog/teampcp-deploys-worm-npm-trivy-compromise
+      - https://socket.dev/blog/canisterworm-npm-publisher-compromise-deploys-backdoor-across-29-packages
+      - https://research.jfrog.com/post/canister-worm/
+      - https://labs.cloudsecurityalliance.org/research/csa-research-note-canisterworm-blockchain-c2-supply-chain-20/
   - name: CanisterSprawl
     start: "2026-04-21"
     end: "2026-04-23"
@@ -40,8 +47,10 @@ campaigns:
       A second wave hit Namastex.ai tooling on npm and PyPI, with cross-ecosystem propagation
       via .pth injection. Canister cjn37-uyaaa-aaaac-qgnva-cai was used for exfiltration
       rather than C2.
-    publishers: []
-    source_urls: []
+    publishers: [Socket, Cloud Security Alliance]
+    source_urls:
+      - https://socket.dev/blog/namastex-npm-packages-compromised-canisterworm
+      - https://labs.cloudsecurityalliance.org/research/csa-research-note-npm-canistersprawl-supply-chain-worm-20260/
 
 iocs:
   - ioc_type: canister_id
@@ -49,7 +58,7 @@ iocs:
     campaign: CanisterWorm
     source: vendor-reports
     source_ref: "campaign:CanisterWorm"
-    source_url: ""
+    source_url: https://socket.dev/blog/canisterworm-npm-publisher-compromise-deploys-backdoor-across-29-packages
     notes: >-
       Dead-drop C2 resolver; update_link rotated the payload URL. Disabled by governance about
       26 hours after disclosure; can be re-enabled.
@@ -59,7 +68,7 @@ iocs:
     campaign: CanisterSprawl
     source: vendor-reports
     source_ref: "campaign:CanisterSprawl"
-    source_url: ""
+    source_url: https://socket.dev/blog/namastex-npm-packages-compromised-canisterworm
     notes: Used for exfiltration rather than C2.
 
   - ioc_type: url
