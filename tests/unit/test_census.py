@@ -244,12 +244,15 @@ def test_inspect_prefers_the_raw_store(sessions: sessionmaker[Session], tmp_path
     ("args", "code", "message"),
     [
         (["not-a-canister", "--offline"], 2, "not a canister id"),
-        ([TDTQY], 2, "--offline"),
+        ([TDTQY], 2, "ICP_THREAT_INTEL_CONTACT"),
         ([cid(42), "--offline"], 1, "no offline data"),
     ],
 )
 def test_inspect_errors(tmp_path: Path, args: list[str], code: int, message: str) -> None:
-    env = {"ICP_THREAT_INTEL_DATABASE_URL": f"sqlite:///{tmp_path / 'absent.db'}"}
+    env = {
+        "ICP_THREAT_INTEL_DATABASE_URL": f"sqlite:///{tmp_path / 'absent.db'}",
+        "ICP_THREAT_INTEL_CONTACT": "",
+    }
     result = _inspect(*args, env=env)
     assert result.exit_code == code and message in result.output
 

@@ -190,7 +190,7 @@
       "id": "T17",
       "type": "docs",
       "title": "CLAUDE.md, README.md and docs/ARCHITECTURE.md",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "CLAUDE.md records conventions, every make target, the guardrails, the read-docs-before-clients rule and the stage contract (D1 protocol names, signatures and pipeline order).",
         "README.md has a 10-minute quickstart using docker compose and make bootstrap, plus a section stating decoys or live probing are out of scope.",

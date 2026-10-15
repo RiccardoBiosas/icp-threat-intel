@@ -1,11 +1,61 @@
 # icp-threat-intel
 
 Threat intelligence and threat hunting for Internet Computer (ICP) canisters used as attack
-infrastructure. See `SPEC.md` for scope and `PLAN.md` for the design.
+infrastructure: dead-drop C2, exfiltration endpoints and payload hosting, as in the
+CanisterWorm (March 2026) and CanisterSprawl (April 2026) supply-chain campaigns. It
+collects public on-chain and registry signals, keeps every response as evidence, scores
+them with one rule per hypothesis, verifies with a two-signal rule and exports IOCs as
+ThreatFox, STIX 2.1, MISP and Markdown.
 
-Licensed under Apache-2.0.
+See `SPEC.md` for scope, `PLAN.md` for the design and `docs/ARCHITECTURE.md` for the
+pipeline and what the IC does not let us see. Licensed under Apache-2.0.
 
-## Quickstart
+## 10-minute quickstart (Docker Compose)
+
+Needs Docker with Compose, [uv](https://docs.astral.sh/uv/) and make (Python 3.12 is
+installed by uv if missing; see the development setup below for details).
+
+```bash
+# 1. Install (about 1 minute)
+git clone <repo-url> icp-threat-intel && cd icp-threat-intel
+make setup                                   # uv sync --all-extras
+
+# 2. Configure: pick a Postgres password and a contact address for the User-Agent
+cp .env.example .env
+#    edit .env: POSTGRES_PASSWORD=<pw>, the same <pw> inside ICP_THREAT_INTEL_DATABASE_URL,
+#    and ICP_THREAT_INTEL_CONTACT=<your email or URL> (required for any live request)
+set -a; source .env; set +a                  # the app reads the environment, not .env
+
+# 3. Database: Postgres 16 + pgvector on 127.0.0.1:5432
+docker compose up -d db
+make migrate                                 # alembic upgrade head (runs on the host)
+
+# 4. Seed the known IOCs and inspect both seed canisters live (read-only)
+make bootstrap
+```
+
+`make bootstrap` loads `data/seed_iocs.yaml` (the CanisterWorm and CanisterSprawl canisters,
+ThreatFox IOC 1781006, packages and host indicators), then runs
+`icp-threat-intel canister inspect` on `tdtqy-oyaaa-aaaae-af2dq-cai` and
+`cjn37-uyaaa-aaaac-qgnva-cai`. Each inspect makes anonymous, query-only requests to
+allowlisted IC hosts (certified `read_state`, an `http_request` query, the raw gateway and
+the Dashboard API), stores every response in the raw store and prints status, controllers,
+module hash, Candid methods and a summary of the gateway body.
+
+Next steps:
+
+```bash
+uv run icp-threat-intel canister inspect <canister-id>            # any canister, live
+uv run icp-threat-intel canister inspect <canister-id> --offline  # raw store or cassettes, no network
+uv run icp-threat-intel census --ceiling 500                       # bounded census walk + diff
+uv run icp-threat-intel digest --out digests                       # daily digest (.md + .json)
+docker compose up -d app                                           # scheduler (make run in a container)
+```
+
+No network or contact address? `uv run icp-threat-intel canister inspect
+tdtqy-oyaaa-aaaae-af2dq-cai --offline` renders the bundled (synthetic) cassettes.
+
+## Development setup
 
 ### 1. Prerequisites
 
@@ -155,12 +205,19 @@ make check                                  # cassette tests may need updating f
 
 ### 8. What runs today
 
-The CLI is installed as `icp-threat-intel` (`uv run icp-threat-intel --help`). `db seed`
-works; the pipeline commands (`collect`, `census`, `parse`, `enrich`, `score`, `verify`,
-`digest`, `publish`, `canister inspect`) are placeholders that print "not implemented"
-until later tasks wire them to the collectors, parsers and rules that already exist as
-library code and tests. `make run` (the scheduler) and `make bootstrap` likewise depend on
-those commands.
+| Command | State |
+|---|---|
+| `db seed [--dry-run]` | works |
+| `canister inspect <id> [--offline]` | works: live collection into the raw store, or offline from the raw store / cassettes |
+| `census [--ceiling N]` | works: Dashboard API walk, diff against the previous run, events |
+| `verify <id> --to verified\|dismissed --actor ... --reason ...` | works: two-signal state machine |
+| `publish --case case.json --format threatfox\|stix\|misp\|markdown --out FILE` | works: refuses cases without `disclosed_at`; writes a local file only |
+| `digest [--out DIR] [--hours N]` | works: Markdown + JSON |
+| `collect`, `parse`, `enrich`, `score`, `db migrate` | not wired yet (exit 2); the collectors, parsers, enrichers and rules exist as library code and are covered by tests. Use `make migrate` for migrations. |
+
+`make run` starts the scheduler with the default cadences (IOC state hourly, raw gateway
+every 6 h, registries, ledger and proposals daily, census weekly, digest daily). Only the
+digest job does work so far; the other jobs log `job_not_available` until wired.
 
 ### Troubleshooting
 
@@ -169,3 +226,23 @@ those commands.
 - `POSTGRES_PASSWORD` error from Compose: set it in `.env` and export it as shown above.
 - A test failing with `NetworkBlocked`: something tried to reach the network in a unit
   test; live access belongs only in tests marked `live` (`make record`).
+
+## Out of scope
+
+This project observes; it does not engage. Specifically out of scope:
+
+- **Decoys and honeypots.** No decoy canisters, fake victims, canary packages or bait
+  infrastructure are deployed.
+- **Live probing beyond read-only observation.** No update calls, no calls to arbitrary
+  canister methods, no fuzzing, scanning, credential testing or interaction with attacker
+  infrastructure. The only live requests are anonymous `read_state` and `query` calls
+  (including `http_request` as a query), GETs of raw-gateway URLs on IC domains, and
+  read-only API reads, all through the host allowlist and rate limits. Gateway bodies are
+  stored and pattern-matched, never executed, rendered or followed off IC domains.
+- **Takedowns and automatic reporting.** The tool never asks the NNS or boundary nodes to
+  act, and never submits to ThreatFox, MISP or anyone else: exports are local files for a
+  human to review after disclosure to DFINITY.
+- **Malware handling.** Package tarballs are hashed and stored locally only; nothing is
+  uploaded, run or imported. Canister Wasm cannot be downloaded from the IC at all.
+- **A web UI** (SPEC D5) and **LLM classification** (documented extension point only).
+

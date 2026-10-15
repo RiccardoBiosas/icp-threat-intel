@@ -1,8 +1,10 @@
 """``icp-threat-intel canister inspect <id> [--offline]``.
 
 Shows a canister's public state: status, subnet, controllers, module hash, Candid methods
-and a summary of each raw-gateway body. Data comes from the raw store, or, offline and when
-the store has nothing for the canister, from recorded cassettes. Bodies are only
+and a summary of each raw-gateway body. Live mode first runs the read_state, raw-gateway and
+Dashboard collectors for the canister (query-only, allowlisted hosts, contact address
+required) and stores every response in the raw store. Offline mode reads the raw store, or,
+when the store has nothing for the canister, recorded cassettes. Bodies are only
 summarised (class, size, hash, short excerpt); nothing in them is executed or followed.
 """
 
@@ -10,6 +12,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from icp_threat_intel.core.config import Settings
@@ -43,6 +46,51 @@ def _store_snapshots(canister_id: str) -> list[RawSnapshot]:
         ]
     except SQLAlchemyError:
         return []
+    finally:
+        engine.dispose()
+
+
+def _collect_live(canister_id: str) -> None:
+    """Run the three collectors for one canister into the raw store (needs a contact)."""
+    from icp_threat_intel.collectors.dashboard import DashboardCollector
+    from icp_threat_intel.collectors.raw_gateway import RawGatewayCollector
+    from icp_threat_intel.collectors.read_state import ReadStateCollector
+    from icp_threat_intel.collectors.runner import collect_into
+    from icp_threat_intel.core.http import SafeHttpClient
+    from icp_threat_intel.core.ic_client import IcClient
+    from icp_threat_intel.db.models import RawSnapshotRow
+    from icp_threat_intel.db.session import make_engine, make_session_factory
+    from icp_threat_intel.raw_store.store import SqlRawStore
+
+    settings = Settings.from_env()
+    if not settings.contact:
+        typer.echo("live inspect needs ICP_THREAT_INTEL_CONTACT (sent in the User-Agent)", err=True)
+        raise typer.Exit(code=2)
+    engine = make_engine(settings.database_url)
+    sessions = make_session_factory(engine)
+    store = SqlRawStore(sessions)
+    try:
+        with sessions() as session:  # fail before any request if the store is unusable
+            session.execute(select(RawSnapshotRow.id).limit(1))
+        with SafeHttpClient(settings.contact) as http:
+            ic = IcClient(http)
+            collectors = (
+                ReadStateCollector(ic),
+                RawGatewayCollector(http, ic),
+                DashboardCollector(http),
+            )
+            for collector in collectors:
+                try:
+                    collect_into(collector, store, [canister_id])
+                except SQLAlchemyError:
+                    raise
+                except Exception as exc:
+                    typer.echo(f"{collector.name}: collection failed: {exc}", err=True)
+    except SQLAlchemyError as exc:
+        typer.echo(
+            f"raw store unavailable ({exc.__class__.__name__}); run `make migrate`", err=True
+        )
+        raise typer.Exit(code=1) from None
     finally:
         engine.dispose()
 
@@ -133,13 +181,12 @@ def canister_inspect(
         typer.echo(f"not a canister id: {canister_id!r}", err=True)
         raise typer.Exit(code=2) from None
     if not offline:
-        typer.echo("live inspect is not available yet; use --offline", err=True)
-        raise typer.Exit(code=2)
+        _collect_live(canister_id)
     snapshots, origin = _store_snapshots(canister_id), "raw store"
-    if not snapshots:
+    if not snapshots and offline:
         snapshots, origin = snapshots_for(cassettes, canister_id), f"cassettes ({cassettes})"
     if not snapshots:
-        typer.echo(f"no offline data for {canister_id}", err=True)
+        typer.echo(f"no {'offline ' if offline else ''}data for {canister_id}", err=True)
         raise typer.Exit(code=1)
     for line in render(canister_id, snapshots, origin):
         typer.echo(line)

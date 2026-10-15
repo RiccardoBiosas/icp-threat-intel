@@ -104,3 +104,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T16 verify command, exit 0; make check 474 passed; coverage 96.95%)
 - Decisions: GatedExporter.export runs require_disclosure before render (render also refuses). build_case accepts only verified detections and adds canister IOCs. Deterministic UUID5 ids everywhere. ThreatFox: canister -> 4 gateway domains, unsupported types skipped, file never sent. MISP distribution 0, unpublished. Markdown checklist: HackenProof (verified) + CoC abuse article (UNVERIFIED), no email printed. Webhook via SafeHttpClient(extra_hosts=[webhook host]), https only. Scheduler: default cadences, missing jobs log job_not_available; make run starts it with the digest job.
 - Follow-ups: wire collector jobs (read_state, raw gateway, census) + ingest + score into the scheduler; confirm DFINITY abuse channel; ThreatFox malware value
+
+## 2026-10-15T08:57:08Z T17 attempt 1
+- Changed: CLAUDE.md (stage contract, make targets, guardrails, read-docs-before-clients, conventions), README.md (Compose quickstart with make bootstrap, command status table, out-of-scope section; user's setup sections kept), docs/ARCHITECTURE.md (mermaid pipeline, "What the IC does not let us see"), cli/canister.py (live inspect), tests/unit/{test_inspect_live,test_census}.py
+- Verify: pass (T17 verify command, exit 0; make check green; coverage ok)
+- Decisions: implemented live canister inspect (3 collectors -> raw store -> render; contact required; raw store preflight before any request; failing source reported, others continue) because make bootstrap runs inspect without --offline and the documented quickstart must work. Tested with respx replaying the cassettes.
+- Follow-ups: T18 final gate (coverage review, OPEN_QUESTIONS review, summary)
