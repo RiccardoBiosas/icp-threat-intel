@@ -103,10 +103,24 @@ Each post object has about 70 keys; the collector reads only the ones above. `id
 - `parsers/signals_feed.py` reads the Markdown `raw` field as plain text, never the HTML,
   and emits:
   - `signal.feed_polled` per page (subject: the feed; status, post count, id range);
-  - `signal.post_observed` per post naming a canister id or a threat keyword (subject
-    `<feed>:<post id>`; url, author, staff flag, keywords, canister ids, IC hosts, a
-    280-character excerpt);
+  - `signal.post_observed` per post naming a canister id, a threat keyword or an IOC term
+    (subject `<feed>:<post id>`; url, author, staff flag, keywords, IOC terms, canister
+    ids, IC hosts, a 280-character excerpt); `is_ioc` when it names an IOC term;
   - `signal.canister_reference` per canister id in such a post (subject: the canister).
+
+## What is matched (parser v2)
+
+- **Keywords** (`parsers/signals_keywords.py`, `KEYWORDS`): case-insensitive whole-word
+  threat terms with a label each (`malicious`, `phishing`, `c2`, `supply_chain`,
+  `dead_drop`, `stealer`, `rug_pull`, `impersonation`, `campaign` for CanisterWorm /
+  CanisterSprawl / TeamPCP / Shai-Hulud, ...). Words common in ordinary developer talk are
+  matched only in a threat context: bare "hack", "abuse", "worm", "compromise", "payload",
+  "postinstall" and "seed phrase" are not keywords.
+- **IOC terms**: non-canister values from the `iocs` table, read at ingest. Packages match
+  by name (`npm:@scope/name@1.2.3` -> `@scope/name`), URLs without a trailing slash; file
+  paths, systemd units and domains as they are. Whole terms only, values under 4 characters
+  are skipped. IOCs added later apply when snapshots are parsed again (`parse`).
+- **Canister ids** (SPEC regex) and **IC hosts** (recorded only).
 
 ## Operating rules
 

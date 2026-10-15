@@ -1,9 +1,10 @@
 """Digest summary of the signals feed: recent community posts worth a look.
 
 Low-authority context only: these posts never count as verification evidence
-(``core/evidence.py``). A post is listed when it names a threat keyword or an IOC canister;
-a bare canister mention is common on developer forums and is left out. Posts that name an
-IOC canister come first, then posts by forum staff, then the newest.
+(``core/evidence.py``). A post is listed when it names a threat keyword, an IOC canister or
+another IOC value (package, file path, systemd unit, URL; ``ioc_terms``); a bare canister
+mention is common on developer forums and is left out. Posts naming an IOC come first, then
+posts by forum staff, then the newest.
 
 Titles come from the forum, so ``md_text`` turns them into inert text: no links, HTML or
 table breaks in the digest. Post URLs are shown as code, not as links.
@@ -49,6 +50,11 @@ class SignalPost:
     keywords: tuple[str, ...]
     canister_ids: tuple[str, ...]
     ioc_canisters: tuple[str, ...]
+    ioc_terms: tuple[str, ...] = ()
+
+    @property
+    def names_ioc(self) -> bool:
+        return bool(self.ioc_canisters or self.ioc_terms)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -74,6 +80,7 @@ def _post(payload: dict[str, Any], iocs: frozenset[str]) -> SignalPost:
         keywords=_strs(payload.get("keywords")),
         canister_ids=canisters,
         ioc_canisters=tuple(c for c in canisters if c in iocs),
+        ioc_terms=_strs(payload.get("ioc_terms")),
     )
 
 
@@ -86,21 +93,22 @@ def recent_signals(session: Session, since: datetime) -> list[SignalPost]:
     )
     iocs = ioc_canisters(session)
     latest = {row.subject_id: _post(row.payload, iocs) for row in rows}  # re-polls collapse
-    posts = [p for p in latest.values() if p.keywords or p.ioc_canisters]
+    posts = [p for p in latest.values() if p.keywords or p.names_ioc]
     posts.sort(key=lambda p: p.created_at or "", reverse=True)
-    posts.sort(key=lambda p: (not p.ioc_canisters, not p.author_staff))
+    posts.sort(key=lambda p: (not p.names_ioc, not p.author_staff))
     return posts[:MAX_SIGNALS]
 
 
 def signals_section(posts: Sequence[SignalPost]) -> list[str]:
     lines = ["", "## Signals (low authority)", "",
-             "Community forum posts naming a threat keyword or an IOC canister. Context only: "
+             "Community forum posts naming a threat keyword or a known IOC. Context only: "
              "they never count as verification evidence.", "",
-             "| Posted | Feed | Topic | Keywords | Canisters | Author | Post |",
+             "| Posted | Feed | Topic | Keywords | Indicators | Author | Post |",
              "|---|---|---|---|---|---|---|"]  # fmt: skip
     for p in posts:
         canisters = ", ".join(
-            f"**`{c}`** (IOC)" if c in p.ioc_canisters else f"`{c}`" for c in p.canister_ids
+            [f"**`{c}`** (IOC)" if c in p.ioc_canisters else f"`{c}`" for c in p.canister_ids]
+            + [f"**`{_code(t)}`** (IOC)" for t in p.ioc_terms]
         )
         lines.append(
             f"| {md_text((p.created_at or '-')[:16])} | {p.feed} | "

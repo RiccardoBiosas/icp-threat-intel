@@ -2,16 +2,21 @@
 
 * every page gives ``signal.feed_polled`` (subject: the feed) with a parse status and the
   post-id range, so a failed poll is evidence rather than a silent gap;
-* a post that names a canister id or a threat keyword gives ``signal.post_observed``
-  (subject ``<feed>:<post id>``); posts with neither give nothing;
+* a post that names a canister id, a threat keyword or an IOC term gives
+  ``signal.post_observed`` (subject ``<feed>:<post id>``); other posts give nothing. A post
+  naming an IOC term is ``is_ioc``;
 * each canister id named in a post gives ``signal.canister_reference`` (subject: the
   canister), which IOC membership enrichment then marks.
 
 Post text is matched as plain text (the Markdown ``raw`` field, never the HTML) and only a
-short excerpt is kept in the payload; the full body stays in the raw store.
+short excerpt is kept in the payload; the full body stays in the raw store. Keywords and
+IOC terms are defined in ``parsers/signals_keywords.py``. IOC terms come from the ``iocs``
+table: ingest passes them in with ``with_ioc_terms``, so parsing stays a pure function of
+the snapshot and that term set.
 """
 
 import re
+from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -20,34 +25,11 @@ from icp_threat_intel.core.enums import SourceType
 from icp_threat_intel.core.models import Event, ParseResult, RawSnapshot
 from icp_threat_intel.enrichment.ioc_join import CANISTER_ID_RE
 from icp_threat_intel.parsers.base import canister_event
+from icp_threat_intel.parsers.signals_keywords import IocTerm, find_ioc_terms, keywords_in
 
 PARSER_NAME = "signals_feed"
 EXCERPT_CHARS = 280
 IC_HOST_RE = re.compile(r"\b(?:[a-z0-9-]+\.)*(?:icp0\.io|ic0\.app|icp-api\.io)\b", re.IGNORECASE)
-# label -> whole-word pattern; labels are what rules and the digest see
-KEYWORDS: dict[str, str] = {
-    "malicious": r"malicious",
-    "malware": r"malware",
-    "phishing": r"phishing",
-    "scam": r"scam(?:s|mer|mers|med)?",
-    "exploit": r"exploit(?:s|ed)?",
-    "backdoor": r"backdoor(?:s|ed)?",
-    "c2": r"c2|command[- ]and[- ]control",
-    "exfiltration": r"exfiltrat(?:e|ed|es|ing|ion)",
-    "denylist": r"deny-?list(?:s|ed)?|block-?list(?:s|ed)?",
-    "takedown": r"take-?down|taken down",
-    "abuse": r"abuse|abusive",
-    "compromised": r"compromised?",
-    "worm": r"worm",
-    "drainer": r"drainers?",
-    "stolen": r"stolen|stole",
-    "hacked": r"hacked|hack",
-}
-_KEYWORD_RES = {k: re.compile(rf"\b(?:{p})\b", re.IGNORECASE) for k, p in KEYWORDS.items()}
-
-
-def _keywords(text: str) -> list[str]:
-    return sorted(k for k, pattern in _KEYWORD_RES.items() if pattern.search(text))
 
 
 def _excerpt(text: str) -> str:
@@ -64,7 +46,14 @@ def _post_url(origin: str, post: ForumPost) -> str | None:
 
 class SignalsFeedParser:
     source_type = SourceType.SIGNALS_FEED
-    version = "1"
+    version = "2"  # 2: tightened keyword list, IOC terms
+
+    def __init__(self, ioc_terms: Iterable[IocTerm] = ()) -> None:
+        self._ioc_terms = tuple(sorted(set(ioc_terms), key=lambda t: (t.ioc_type, t.term)))
+
+    def with_ioc_terms(self, ioc_terms: Iterable[IocTerm]) -> "SignalsFeedParser":
+        """A parser that also matches these IOC values (from the ``iocs`` table)."""
+        return SignalsFeedParser(ioc_terms)
 
     @property
     def parser_id(self) -> str:
@@ -122,9 +111,10 @@ class SignalsFeedParser:
     def _post_events(
         self, snapshot: RawSnapshot, feed: str, origin: str, post: ForumPost
     ) -> list[Event]:
-        keywords = _keywords(post.raw)
+        keywords = keywords_in(post.raw)
+        ioc_terms = find_ioc_terms(post.raw, self._ioc_terms)
         canister_ids = sorted(set(CANISTER_ID_RE.findall(post.raw)))
-        if not keywords and not canister_ids:
+        if not keywords and not canister_ids and not ioc_terms:
             return []
         url = _post_url(origin, post)
         payload: dict[str, Any] = {
@@ -139,12 +129,16 @@ class SignalsFeedParser:
             "author_staff": post.staff,
             "category_id": post.category_id,
             "keywords": keywords,
+            "ioc_terms": ioc_terms,
             "canister_ids": canister_ids,
             "ic_hosts": sorted({h.lower() for h in IC_HOST_RE.findall(post.raw)}),
             "excerpt": _excerpt(post.raw),
         }
         subject = ("signal_post", f"{feed}:{post.post_id}")
-        events = [self._event(snapshot, "signal.post_observed", subject, payload)]
+        post_event = self._event(snapshot, "signal.post_observed", subject, payload)
+        if ioc_terms:
+            post_event = post_event.model_copy(update={"is_ioc": True})
+        events = [post_event]
         reference = {
             k: payload[k]
             for k in ("feed", "post_id", "url", "created_at", "author_staff", "keywords")

@@ -26,6 +26,7 @@ from icp_threat_intel.parsers.dashboard import DashboardParser
 from icp_threat_intel.parsers.raw_gateway import RawGatewayParser
 from icp_threat_intel.parsers.read_state import ReadStateParser
 from icp_threat_intel.parsers.signals_feed import SignalsFeedParser
+from icp_threat_intel.parsers.signals_keywords import IocTerm, ioc_term
 
 log = structlog.get_logger(__name__)
 
@@ -51,6 +52,13 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
+def ioc_text_terms(session: Session) -> tuple[IocTerm, ...]:
+    """Non-canister IOC values the signals parser matches in post text."""
+    rows = session.execute(select(Ioc.ioc_type, Ioc.value)).all()
+    terms = {t for t in (ioc_term(ioc_type, value) for ioc_type, value in rows) if t}
+    return tuple(sorted(terms, key=lambda t: (t.ioc_type, t.term)))
+
+
 def ioc_canisters(session: Session) -> frozenset[str]:
     flagged = session.scalars(select(Canister.id).where(Canister.is_ioc.is_(True)))
     named = canister_ids_in(session.scalars(select(Ioc.value)))
@@ -70,11 +78,15 @@ class Ingestor:
         result = IngestResult()
         with self._sessions() as session, session.begin():
             ioc_join = IocJoinEnricher(ioc_canisters(session))
+            terms: tuple[IocTerm, ...] | None = None
             for snapshot in snapshots:
                 parser = self._parsers.get(snapshot.source_type)
                 if parser is None:
                     result.unparsed += 1
                     continue
+                if isinstance(parser, SignalsFeedParser):  # IOC values matched in post text
+                    terms = ioc_text_terms(session) if terms is None else terms
+                    parser = parser.with_ioc_terms(terms)
                 source = session.scalar(select(Source).where(Source.name == snapshot.source_name))
                 if source is None:
                     raise ValueError(f"raw snapshot {snapshot.id} has no source row")

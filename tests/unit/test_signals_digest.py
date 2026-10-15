@@ -167,3 +167,39 @@ def test_digest_without_signals_has_no_section() -> None:
     digest = build_digest([], period_start=START, period_end=NOW)
     assert "Signals" not in digest.markdown
     assert digest.data["signals"] == []
+
+
+def test_ioc_term_posts_are_listed_first(session: Session) -> None:
+    src = _source(session)
+    _post(session, src, 1, keywords=["scam"], created="2026-10-15T11:00:00.000Z")
+    session.add(
+        EventRow(
+            kind="signal.post_observed",
+            subject_type="signal_post",
+            subject_id="dfinity-forum:2",
+            observed_at=NOW,
+            source_id=src.id,
+            source_type=SourceType.SIGNALS_FEED,
+            parser="signals_feed@2",
+            weight=40,
+            is_ioc=True,
+            payload={
+                "feed": "dfinity-forum",
+                "post_id": 2,
+                "keywords": [],
+                "canister_ids": [],
+                "ioc_terms": ["/tmp/pglog"],
+            },
+            dedup_key="t" * 64,
+        )
+    )
+    session.flush()
+    posts = recent_signals(session, START)
+    assert [p.post_id for p in posts] == [2, 1]
+    assert posts[0].ioc_terms == ("/tmp/pglog",) and posts[0].names_ioc
+
+
+def test_ioc_terms_rendered_as_inert_code() -> None:
+    post = _signal(canister_ids=(), ioc_canisters=(), ioc_terms=("pgmon.service",))
+    md = build_digest([], period_start=START, period_end=NOW, signals=[post]).markdown
+    assert "**`pgmon.service`** (IOC)" in md and "| Indicators |" in md
