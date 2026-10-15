@@ -135,7 +135,7 @@
       "id": "T12",
       "type": "feat",
       "title": "rules H2 lifecycle and H3 supply-chain references",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "H2 and H3 implemented with positive and negative synthetic-event tests; H3 matches the canister-ID regex, gateway hosts and the host indicators /tmp/pglog and pgmon.service.",
         "Docstrings cite CanisterWorm, ThreatFox 1781006 and CanisterSprawl."

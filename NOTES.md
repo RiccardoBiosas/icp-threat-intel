@@ -73,3 +73,9 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T11 verify command, exit 0; make check green)
 - Decisions: BaseRule.score = signals() + required-signal check + assess(); evidence refs prefer event id, fall back to raw snapshot; weighted_confidence via core.trust over supporting events. H1 pair = update/set/put[_stem] setter (update mode) with get/fetch[_latest][_stem] getter, same stem (CanisterWorm's update_link/get_latest_link). Body signal: gateway.body_observed (200, outcome ok) or http_request_queried (canister status 200), class url/base64/shell, 1..4096 bytes, not truncated. Score 0.7 + 0.15 url body + 0.15 link/url stem. engine.run_rules is pure; persistence left to the CLI.
 - Follow-ups: T13 REGISTRY and test_rules_are_pure; T14 persists detections
+
+## 2026-10-15T08:01:51Z T12 attempt 1
+- Changed: rules/{h2_lifecycle,h3_supply_chain}.py, tests/rules/{test_h2,test_h3}.py, OPEN_QUESTIONS.md
+- Verify: pass (T12 verify command, exit 0; make check green)
+- Decisions: H2 = is_ioc event + lifecycle change (stopped->running flip, controllers or module hash change; explicit *_changed / census.canister_changed events or derived from consecutive same-source state_observed). Optional governance_action signal (proposal.references_target or gateway denylisted) gives "hours since last action". H3 = package.version_published + package.canister_reference whose text matches canister-ID regex, gateway host (host position only) or /tmp/pglog, pgmon.service, systemd user units; score bonuses per match kind and install location. Payload contracts for future producers logged in OPEN_QUESTIONS.
+- Follow-ups: T13 REGISTRY + purity test; README Quickstart was committed by the user separately (4b12b4f), outside the loop
