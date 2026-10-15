@@ -179,7 +179,7 @@
       "id": "T16",
       "type": "feat",
       "title": "exporters (ThreatFox, STIX 2.1, MISP) and daily digest",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "Exporters produce valid ThreatFox submission JSON, a STIX 2.1 bundle and a MISP event JSON from verified detections and seed IOCs; all refuse cases without disclosed_at.",
         "Digest writes Markdown and JSON; stdout and webhook notifiers (webhook tested with respx)."

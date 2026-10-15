@@ -70,7 +70,7 @@ def test_canister_inspect_accepts_offline_flag() -> None:
 
 
 def test_stub_exits_two() -> None:
-    result = runner.invoke(app, ["digest"])
+    result = runner.invoke(app, ["collect"])
     assert result.exit_code == 2
 
 

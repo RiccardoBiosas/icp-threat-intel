@@ -11,6 +11,7 @@ import typer
 from icp_threat_intel.cli.canister import canister_app
 from icp_threat_intel.cli.db import db_app
 from icp_threat_intel.cli.pipeline import census, verify
+from icp_threat_intel.cli.publishing import digest, publish
 
 app = typer.Typer(
     name="icp-threat-intel",
@@ -21,6 +22,8 @@ app.add_typer(db_app, name="db")
 app.add_typer(canister_app, name="canister")
 app.command("verify")(verify)
 app.command("census")(census)
+app.command("digest")(digest)
+app.command("publish")(publish)
 
 
 def _not_implemented(command: str) -> NoReturn:
@@ -50,18 +53,6 @@ def enrich() -> None:
 def score() -> None:
     """Run detection rules H1-H6 and record candidate detections."""
     _not_implemented("score")
-
-
-@app.command()
-def digest() -> None:
-    """Build the daily digest (Markdown and JSON)."""
-    _not_implemented("digest")
-
-
-@app.command()
-def publish() -> None:
-    """Export a disclosed case as ThreatFox, STIX 2.1, MISP or Markdown."""
-    _not_implemented("publish")
 
 
 def main() -> None:
