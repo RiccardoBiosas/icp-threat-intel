@@ -89,15 +89,36 @@ def test_campaigns_and_dates(seed: SeedFile) -> None:
     assert canister_campaign == {WORM: "CanisterWorm", SPRAWL: "CanisterSprawl"}
 
 
+# Write-up URLs from docs/sources/vendor-rss.md, each fetched (HTTP 200) on 2026-10-15.
+WORM_WRITEUPS = {
+    "https://www.aikido.dev/blog/teampcp-deploys-worm-npm-trivy-compromise",
+    "https://socket.dev/blog/canisterworm-npm-publisher-compromise-deploys-backdoor-across-29-packages",
+    "https://research.jfrog.com/post/canister-worm/",
+    "https://labs.cloudsecurityalliance.org/research/csa-research-note-canisterworm-blockchain-c2-supply-chain-20/",
+}
+SPRAWL_WRITEUPS = {
+    "https://socket.dev/blog/namastex-npm-packages-compromised-canisterworm",
+    "https://labs.cloudsecurityalliance.org/research/csa-research-note-npm-canistersprawl-supply-chain-worm-20260/",
+}
+
+
 def test_no_invented_urls_or_sources(seed: SeedFile) -> None:
     raw = yaml.safe_load(DEFAULT_SEED_PATH.read_text(encoding="utf-8"))
-    text = yaml.safe_dump(raw)
+    text = yaml.safe_dump(raw, width=1000)
     urls = {u for u in text.split() if u.startswith("http")}
-    assert urls <= {TF_URL, "https://threatfox.abuse.ch", f"https://{WORM}.raw.icp0.io/"}
+    allowed = {TF_URL, "https://threatfox.abuse.ch", f"https://{WORM}.raw.icp0.io/"}
+    assert urls <= allowed | WORM_WRITEUPS | SPRAWL_WRITEUPS
     assert {s.source_type for s in seed.sources} == {SourceType.THREATFOX, SourceType.VENDOR_RSS}
-    assert all(c.source_urls == [] for c in seed.campaigns)
+    by_name = {c.name: set(c.source_urls) for c in seed.campaigns}
+    assert by_name == {"CanisterWorm": WORM_WRITEUPS, "CanisterSprawl": SPRAWL_WRITEUPS}
     assert "H6" not in text
     assert "September" not in text
+
+
+def test_campaign_canister_iocs_cite_a_writeup(seed: SeedFile) -> None:
+    urls = {i.value: i.source_url for i in seed.iocs if i.ioc_type is IocType.CANISTER_ID}
+    assert urls[WORM] in WORM_WRITEUPS
+    assert urls[SPRAWL] in SPRAWL_WRITEUPS
 
 
 def test_iocs_keep_their_publisher_source_type(seed: SeedFile) -> None:
