@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from icp_threat_intel.alerting.parses import newest_parse_only
 from icp_threat_intel.db.models import EventRow
 
 
@@ -47,6 +48,7 @@ def blocklisted_canisters(
         .where(EventRow.kind == "signal.canister_listed")
         .order_by(EventRow.observed_at, EventRow.id)
     ).all()
+    rows = newest_parse_only(session, rows)
     grouped: dict[str, list[EventRow]] = defaultdict(list)
     for row in rows:
         grouped[str(row.canister_id)].append(row)

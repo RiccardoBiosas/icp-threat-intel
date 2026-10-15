@@ -12,8 +12,9 @@ newest first, then later pages up to ``pages`` while Algolia reports more (``nbP
 * **Data only.** Story and comment text arrives as HTML; ``html_to_text`` extracts the text
   with the standard-library parser (nothing is rendered or fetched) and links are never
   followed. Each hit becomes a ``ForumPost`` with its news.ycombinator.com permalink.
-* **Exact phrases.** ``HN_EXACT_PHRASES`` (``internet computer``) are sent in quotes;
-  unquoted, Algolia matches the two words anywhere (31,902 hits instead of 309).
+* **Exact words.** ``hn_query_text`` quotes ``HN_EXACT_PHRASES`` (``internet computer``)
+  as a phrase and every other word on its own, which turns off Algolia's typo tolerance
+  (unquoted, ``dfinity`` matched "infinity"-like words: 1,498 hits, none containing it).
 * **ICP context.** Hacker News is not about ICP, so the parser keeps an item only when its
   text or story title clearly refers to ICP (``signals_keywords.has_icp_context``);
   general security words alone never make a signal.
@@ -53,10 +54,21 @@ def hn_http(contact: str, **kwargs: Any) -> SafeHttpClient:
     return SafeHttpClient(contact, extra_hosts=(HN_HOST,), **kwargs)
 
 
-def hn_search_url(query: str, page: int = 0, since: int | None = None) -> str:
+def hn_query_text(query: str) -> str:
+    """The query as sent: exact phrases quoted whole, every other word quoted on its own.
+
+    Quotes turn off Algolia's typo tolerance: unquoted, ``dfinity`` returned 1,498 hits and
+    none of the first 50 contained the word; quoted, 189, all containing it (2026-10-16).
+    """
     term = check_search_term(query)
+    if term in HN_EXACT_PHRASES:
+        return f'"{term}"'
+    return " ".join(f'"{word}"' for word in term.split())
+
+
+def hn_search_url(query: str, page: int = 0, since: int | None = None) -> str:
     params: list[tuple[str, str | int]] = [
-        ("query", f'"{term}"' if term in HN_EXACT_PHRASES else term),
+        ("query", hn_query_text(query)),
         ("tags", "(story,comment)"),
         ("hitsPerPage", HITS_PER_PAGE),
         ("page", page),

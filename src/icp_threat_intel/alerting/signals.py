@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from icp_threat_intel.alerting.blocklisted import BlocklistedCanister, blocklisted_section
+from icp_threat_intel.alerting.parses import newest_parse_only
 from icp_threat_intel.core.models import Notification
 from icp_threat_intel.db.models import EventRow
 from icp_threat_intel.parsers.ingest import ioc_canisters
@@ -92,7 +93,8 @@ def matched_signals(session: Session, since: datetime) -> list[SignalPost]:
         select(EventRow)
         .where(EventRow.kind == "signal.post_observed", EventRow.observed_at >= since)
         .order_by(EventRow.observed_at, EventRow.id)
-    )
+    ).all()
+    rows = newest_parse_only(session, rows)  # a stricter re-parse hides older matches
     iocs = ioc_canisters(session)
     latest = {row.subject_id: _post(row.payload, iocs) for row in rows}  # re-polls collapse
     posts = [p for p in latest.values() if p.keywords or p.names_ioc]

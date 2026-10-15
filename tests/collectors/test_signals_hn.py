@@ -81,7 +81,10 @@ def test_urls() -> None:
         "https://hn.algolia.com/api/v1/search_by_date?query=%22internet+computer%22"
         "&tags=%28story%2Ccomment%29&hitsPerPage=100&page=0"
     )
-    assert "query=icp+canister&" in hn_search_url("icp canister")  # phrase finds nothing
+    # every other word is quoted on its own, which turns off typo matching: unquoted,
+    # "dfinity" returned 1,498 hits and none of the first 50 contained the word
+    assert "query=%22icp%22+%22canister%22&" in hn_search_url("icp canister")
+    assert "query=%22dfinity%22&" in hn_search_url("dfinity")
     assert hn_search_url("dfinity", page=2, since=1700000000).endswith(
         "&page=2&numericFilters=created_at_i%3E1700000000"
     )
@@ -165,3 +168,11 @@ def test_extract_hn_posts_is_defensive() -> None:
     assert extract_hn_posts(b"x") is None
     assert extract_hn_posts(b'{"hits": 3}') is None
     assert extract_hn_posts(b'{"hits": [{"objectID": "nope"}, 5, {"objectID": "7"}]}') is not None
+
+
+def test_hn_query_text() -> None:
+    from icp_threat_intel.collectors.signals_hn import hn_query_text
+
+    assert hn_query_text("internet computer") == '"internet computer"'
+    assert hn_query_text("icp canister") == '"icp" "canister"'
+    assert hn_query_text("dfinity") == '"dfinity"'

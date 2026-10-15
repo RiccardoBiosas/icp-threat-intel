@@ -54,9 +54,17 @@ query), plus the shared client's per-host limit and backoff on 429/5xx.
 
 - `collectors/signals_hn.py`: `HackerNewsCollector(hn_http(contact))`. The host
   `hn.algolia.com` is allowed only through `hn_http` (`SafeHttpClient(extra_hosts=...)`).
-- **Exact phrases:** `internet computer` is sent in quotes. Unquoted, Algolia matches the
-  two words anywhere: on 2026-10-16 it returned 31,902 hits unquoted and 309 quoted.
-  `icp canister` stays unquoted (7 hits; the exact phrase has none).
+- **Exact words (`hn_query_text`):** `internet computer` is sent as a quoted phrase, and every
+  other word is quoted on its own, which turns off Algolia's typo tolerance. Checked on
+  2026-10-16:
+
+  | Query | Unquoted | Quoted |
+  |---|---|---|
+  | internet computer | 31,902 hits (the two words anywhere) | 309 (`"internet computer"`) |
+  | dfinity | 1,498 hits, none of the first 50 containing the word ("infinity"-like typos) | 189, all containing it |
+  | teampcp | 1,423 hits, 18 of the first 50 containing it | 89, all containing it |
+  | icp canister | 7 hits | 1 (`"icp" "canister"`) |
+  | canisterworm | 6 | 7 |
 - **ICP-context gate (parser v3):** Hacker News is not about ICP, so an item counts only if
   its own text or its story title clearly refers to ICP: "Internet Computer" with that
   capitalisation, DFINITY, an ICP gateway host (`icp0.io`, `ic0.app`, `icp-api.io`), a
@@ -78,6 +86,13 @@ query), plus the shared client's per-host limit and backoff on 429/5xx.
   path as forum posts: `signal.feed_polled` (with `request: hn_search` and the query),
   `signal.post_observed`, `signal.canister_reference`. Subjects are `hackernews:<objectID>`.
 - CLI: `collect hackernews [--pages N] [--since YYYY-MM-DD] [--no-parse]`.
+
+## After upgrading the parser
+
+Run `python -m icp_threat_intel.cli parse` after a parser version change. Re-parsing adds new
+events beside the old ones; the digest then uses, for each stored response, only the events of
+its newest parse (`alerting/parses.py`), so items a stricter parser drops stop showing. Until a
+response is re-parsed, its older events still count.
 
 ## Sample response
 

@@ -12,12 +12,13 @@ from typer.testing import CliRunner
 from icp_threat_intel.cli import collect as collect_cli
 from icp_threat_intel.cli.app import app
 from icp_threat_intel.collectors import signals_hn
+from icp_threat_intel.collectors.signals_hn import hn_query_text
 from icp_threat_intel.core.enums import IocType, SourceType
 from icp_threat_intel.core.ratelimit import HostRateLimiter
 from icp_threat_intel.db.base import Base
 from icp_threat_intel.db.models import EventRow, Ioc, RawSnapshotRow, Source
 from icp_threat_intel.db.session import make_engine, make_session_factory
-from icp_threat_intel.parsers.signals_keywords import HN_EXACT_PHRASES, HN_QUERIES
+from icp_threat_intel.parsers.signals_keywords import HN_QUERIES
 from tests.collectors import _hn_fixtures as fx
 
 runner = CliRunner()
@@ -101,7 +102,8 @@ def test_collects_and_parses(db: str, algolia: respx.MockRouter, fast: list[floa
     assert "2 post(s) matched" in result.output
     assert "1 IOC canister reference(s)" in result.output
     sent = [c.request.url.params["query"] for c in algolia.calls]
-    assert sent == [f'"{q}"' if q in HN_EXACT_PHRASES else q for q in HN_QUERIES]
+    assert sent == [hn_query_text(q) for q in HN_QUERIES]
+    assert all(q.startswith('"') for q in sent)
     assert len(fast) == len(HN_QUERIES) - 1
     assert _count(db, RawSnapshotRow) == 6
     assert _count(db, EventRow, EventRow.kind == "signal.post_observed") == 2
