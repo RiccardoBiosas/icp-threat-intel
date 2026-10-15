@@ -110,3 +110,22 @@ Iteration journal. Each iteration appends one entry of at most ten lines (see PR
 - Verify: pass (T17 verify command, exit 0; make check green; coverage ok)
 - Decisions: implemented live canister inspect (3 collectors -> raw store -> render; contact required; raw store preflight before any request; failing source reported, others continue) because make bootstrap runs inspect without --offline and the documented quickstart must work. Tested with respx replaying the cassettes.
 - Follow-ups: T18 final gate (coverage review, OPEN_QUESTIONS review, summary)
+
+## 2026-10-15T09:02:51Z T18 attempt 1
+- Changed: tests/unit/test_edge_cases.py (IC client error paths, raw-store race, cassette pre-check branches, rule base hooks), OPEN_QUESTIONS.md (statuses updated, 3 T18 entries)
+- Verify: pass (T18 verify command, exit 0; make check green; make coverage 100% on rules, verification, raw_store, core.ic_client; no exclusions added)
+- Decisions: closed every uncovered line with behaviour tests, not pragmas. Marked T05 weights and T06 read_state v3 as resolved, T12 producers as partly resolved.
+- Follow-ups: see the summary below
+
+## Summary for human review (all 18 tasks done)
+
+Review these first, in order:
+1. **Synthetic cassettes.** All read_state, raw-gateway and Dashboard cassettes are synthetic (no ICP_THREAT_INTEL_CONTACT was configured). Set a contact, run `make record`, and expect cassette-driven tests to need updating; the Dashboard field names (T09, T15) are inferred, not confirmed.
+2. **Query-only vs the raw gateway (T06/T08).** A raw GET can make the gateway run an `http_request_update` update call. The fetcher pre-checks with an `http_request` query and skips the GET on `upgrade = true`, but a hostile canister could answer differently. Decide whether raw GETs should stay at all.
+3. **No BLS certificate verification (T07).** read_state events say `unverified:no_bls`; pick a BLS backend and pin the IC root key before relying on read_state as evidence.
+4. **DFINITY disclosure contact (T16).** The abuse-report channel is marked UNVERIFIED in the Markdown checklist; DFINITY's bug-bounty page says its email addresses are not monitored. Confirm the channel by hand.
+5. **Trust weights (T10)** and **H1-H3 scoring** are judgement calls; check `core/trust.py` and the rule docstrings against your threat model.
+6. **Non-IC hosts (T06).** npm, PyPI, abuse.ch, GitHub and vendor feeds are off the allowlist and those collectors are not built; extend SPEC D6 first if you want them.
+7. **Unwired commands (T18).** `collect`, `parse`, `enrich`, `score` and most scheduler jobs are not wired to the CLI; the library code and tests exist.
+8. **Licensing of abuse.ch data (T06)** before redistributing any ThreatFox or URLhaus IOC.
+Also: the user's README edit (4-space indent before `python3.12 -m venv`) went into the T15 commit and looks accidental.

@@ -202,7 +202,7 @@
       "id": "T18",
       "type": "test",
       "title": "final gate: coverage and full check",
-      "status": "pending",
+      "status": "done",
       "acceptance": [
         "make coverage passes at 80% or more on rules, verification, raw_store and the IC client, by adding tests rather than excluding code.",
         "make check passes; OPEN_QUESTIONS.md lists every unresolved decision; NOTES.md ends with a summary of what a human should review first."
