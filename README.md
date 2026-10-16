@@ -152,6 +152,7 @@ uv run pytest -q tests/guardrails                       # safety guardrails (que
 uv run pytest -q tests/collectors/test_read_state.py    # read_state collector + certificate decoding
 uv run pytest -q tests/collectors/test_raw_gateway.py   # raw gateway fetcher (1 MB cap, timeout, redirects)
 uv run pytest -q tests/collectors/test_dashboard.py     # Dashboard API collector
+uv run pytest -q tests/collectors/test_signals_feed.py  # signals feed (community forums) collector
 uv run pytest -q tests/parsers                          # raw snapshots -> events, trust weights, idempotent ingest
 uv run pytest -q tests/rules                            # detection rules on synthetic events
 ```
@@ -214,11 +215,14 @@ make check                                  # cassette tests may need updating f
 | `census [--ceiling N]` | works: Dashboard API walk, diff against the previous run, events |
 | `verify <id> --to verified\|dismissed --actor ... --reason ...` | works: two-signal state machine |
 | `publish --case case.json --format threatfox\|stix\|misp\|markdown --out FILE` | works: refuses cases without `disclosed_at`; writes a local file only |
-| `digest [--out DIR] [--hours N]` | works: Markdown + JSON with detections, watched IOC canisters (changed or unchanged since the previous observation) and the latest census |
+| `digest [--out DIR] [--hours N] [--overwrite] [--signals-only] [--limit N \| --all] [--keyword LABEL[,LABEL...]] [--ioc-only] [--feed NAME[,NAME...]]` | works (`--signals-only`: just the forum posts, in `icp-threat-intel_signals_digest_<UTC>` files; signals capped at `--limit`, default 20, or `--all`, with a note when posts are left out; `--keyword phishing,drainer` keeps posts with any of the given keyword labels (comma-separated or repeated), `--ioc-only` only posts naming an IOC, `--feed hackernews` (or `dfinity-forum`, `phishdestroy`, comma-separated) only those feeds, and the filter is recorded in the digest): writes `icp-threat-intel_digest_<UTC YYYY-MM-DDTHHMMSSZ>.md` and `.json`, never replacing an existing file unless `--overwrite`; Markdown + JSON with detections, watched IOC canisters (changed or unchanged since the previous observation), the latest census and recent low-authority signals (forum posts naming a threat keyword or an IOC canister) |
 | `parse` | works: turns stored raw snapshots into events and canister snapshots (trust weights and IOC flags applied at ingest); safe to re-run |
 | `enrich` | works: re-applies IOC membership to stored events after IOCs change (e.g. a re-seed) |
 | `score` | works: runs rules H1-H7 over stored events and records **candidate** detections; one per rule and canister, later evidence is merged into it |
-| `collect`, `db migrate` | not wired yet (exit 2). Use `canister inspect` or `census` to collect, and `make migrate` for migrations. |
+| `collect signals [--feed NAME] [--pages N] [--backfill] [--since YYYY-MM-DD] [--search] [--search-pages N] [--max-topics N] [--no-parse]` | works: `--backfill` walks up to 200 pages of history, `--search` searches curated generic threat terms (never IOC values) and fetches the matching topics; polls community forums (the signals feed, low authority, `docs/sources/signals-feed.md`) into the raw store and parses them; run by hand, no scheduler job. Needs `ICP_THREAT_INTEL_CONTACT` and migration 0002 (`make migrate`) |
+| `collect hackernews [--pages N] [--since YYYY-MM-DD] [--no-parse]` | works: searches Hacker News (Algolia, no key) with curated ICP queries only (`internet computer`, `dfinity`, campaign names; never IOC values) and parses stories and comments like forum posts (`docs/sources/hackernews.md`) |
+| `collect blocklists [--no-parse]` | works: downloads PhishDestroy's full phishing/scam list from GitLab (bulk only, no per-domain lookups) and lists the ICP canisters in it as low-authority signals (`docs/sources/phishdestroy.md`); the digest shows them under "Blocklisted ICP canisters" |
+| bare `collect`, `db migrate` | not wired yet (exit 2). Use `collect signals`, `canister inspect` or `census` to collect, and `make migrate` for migrations. |
 
 `make run` starts the scheduler with the default cadences (IOC state hourly, raw gateway
 every 6 h, registries, ledger and proposals daily, census weekly, digest daily). Only the

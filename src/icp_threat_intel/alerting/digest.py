@@ -5,7 +5,10 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
+from icp_threat_intel.alerting.blocklisted import BlocklistedCanister, blocklisted_section
+from icp_threat_intel.alerting.signals import SignalFilter, SignalPost, signals_section
 from icp_threat_intel.alerting.watch import CensusSummary, WatchedCanister
 from icp_threat_intel.core.enums import DetectionStatus
 from icp_threat_intel.core.interfaces import Notifier
@@ -73,6 +76,10 @@ def build_digest(
     period_end: datetime,
     watched: Sequence[WatchedCanister] = (),
     census: CensusSummary | None = None,
+    signals: Sequence[SignalPost] = (),
+    signals_total: int | None = None,
+    signals_filter: SignalFilter | None = None,
+    blocklisted: Sequence[BlocklistedCanister] = (),
 ) -> Notification:
     ordered = sorted(
         detections,
@@ -95,7 +102,11 @@ def build_digest(
         lines += _watched_section(watched)
     if census is not None:
         lines += _census_section(census)
-    data = {
+    if signals:
+        lines += signals_section(signals, signals_total, signals_filter)
+    if blocklisted:
+        lines += blocklisted_section(blocklisted)
+    data: dict[str, Any] = {
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
         "counts": {
@@ -105,17 +116,62 @@ def build_digest(
         "detections": [d.model_dump(mode="json") for d in ordered],
         "watched": [w.to_dict() for w in watched],
         "census": census.to_dict() if census is not None else None,
+        "signals_total": signals_total if signals_total is not None else len(signals),
+        "signals": [p.to_dict() for p in signals],
     }
+    if signals_filter is not None and signals_filter.active:
+        data["signals_filter"] = signals_filter.to_dict()
+    if blocklisted:
+        data["blocklisted"] = [r.to_dict() for r in blocklisted]
     return Notification(kind="digest", title=title, markdown="\n".join(lines) + "\n", data=data)
 
 
-def write_digest(digest: Notification, out_dir: Path) -> tuple[Path, Path]:
-    """Write ``<title>.md`` and ``<title>.json``; returns both paths."""
+class DigestExists(FileExistsError):
+    """A digest file with this name is already on disk and ``overwrite`` was not set."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(f"digest exists: {path}")
+        self.path = path
+
+
+def digest_stem(digest: Notification) -> str:
+    """``<title without its date>_<period end, UTC, to the second>``.
+
+    ``icp-threat-intel_digest_2026-10-15T160652Z`` for the full digest,
+    ``icp-threat-intel_signals_digest_...`` for ``digest --signals-only``.
+    """
+    end = datetime.fromisoformat(str(digest.data["period_end"])).astimezone(UTC)
+    prefix = "_".join(digest.title.split()[:-1])
+    return f"{prefix}_{end:%Y-%m-%dT%H%M%SZ}"
+
+
+def write_digest(
+    digest: Notification, out_dir: Path, *, overwrite: bool = False
+) -> tuple[Path, Path]:
+    """Write ``<stem>.md`` and ``<stem>.json``; returns both paths.
+
+    Existing files are never replaced unless ``overwrite`` is true: if either file exists,
+    ``DigestExists`` is raised before anything is written. Files are created exclusively,
+    so a file appearing between the check and the write is not clobbered either.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = digest.title.replace(" ", "_")
+    stem = digest_stem(digest)
     md, js = out_dir / f"{stem}.md", out_dir / f"{stem}.json"
-    md.write_text(digest.markdown, encoding="utf-8")
-    js.write_text(json.dumps(digest.data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if not overwrite:
+        for path in (md, js):
+            if path.exists():
+                raise DigestExists(path)
+    mode = "w" if overwrite else "x"
+    contents = (
+        (md, digest.markdown),
+        (js, json.dumps(digest.data, indent=2, sort_keys=True) + "\n"),
+    )
+    for path, text in contents:
+        try:
+            with path.open(mode, encoding="utf-8") as handle:
+                handle.write(text)
+        except FileExistsError:
+            raise DigestExists(path) from None
     return md, js
 
 

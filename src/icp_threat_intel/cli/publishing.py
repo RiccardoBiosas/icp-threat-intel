@@ -8,6 +8,7 @@ from typing import Annotated
 import typer
 from pydantic import ValidationError
 
+from icp_threat_intel.alerting.signals import MAX_SIGNALS
 from icp_threat_intel.core.models import Case
 from icp_threat_intel.publishing.case import GatedExporter
 from icp_threat_intel.publishing.gate import DisclosureRequired
@@ -55,29 +56,132 @@ def publish(
     typer.echo(f"wrote {fmt.value} export of case {case.case_id} to {out}")
 
 
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
 def digest(
     out_dir: Annotated[Path, typer.Option("--out", help="Directory for .md and .json.")] = Path(
         "digests"
     ),
     hours: Annotated[int, typer.Option("--hours", help="Look-back window.", min=1)] = 24,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Replace a digest file that already exists.")
+    ] = False,
+    signals_only: Annotated[
+        bool,
+        typer.Option("--signals-only", help="Only the signals feed (community forum posts)."),
+    ] = False,
+    limit: Annotated[
+        int, typer.Option("--limit", min=1, help="Signals shown (best first; default 20).")
+    ] = MAX_SIGNALS,
+    show_all: Annotated[
+        bool, typer.Option("--all", help="Show every matched signal (overrides --limit).")
+    ] = False,
+    keyword: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--keyword",
+            help="Only signals with any of these keyword labels, comma-separated "
+            "(e.g. phishing,drainer); the flag can also be repeated.",
+        ),
+    ] = None,
+    ioc_only: Annotated[
+        bool, typer.Option("--ioc-only", help="Only signals naming an IOC canister or value.")
+    ] = False,
+    feed: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--feed",
+            help="Only signals from these feeds, comma-separated (e.g. hackernews or "
+            "dfinity-forum,phishdestroy); the flag can also be repeated.",
+        ),
+    ] = None,
 ) -> None:
-    """Build the daily digest (Markdown and JSON) from detections in the database."""
+    """Build the digest (Markdown and JSON) from detections in the database.
+
+    ``--signals-only`` writes a separate signals digest (``icp-threat-intel_signals_digest_*``)
+    with just the community forum posts. Signals are capped at ``--limit`` (default 20), or
+    not at all with ``--all``; the digest says how many matched posts it left out.
+    ``--keyword`` (any of the given labels, comma-separated or repeated) and ``--ioc-only``
+    narrow the signals first, and ``--feed`` (comma-separated or repeated) keeps only the
+    given feeds, blocklists included; the filter is recorded in the digest.
+
+    Files are named after the period end in UTC, to the second, and existing files are
+    never replaced unless ``--overwrite`` is given.
+    """
     from sqlalchemy import select
 
-    from icp_threat_intel.alerting.digest import build_digest, write_digest
+    from icp_threat_intel.alerting.blocklisted import blocklisted_canisters
+    from icp_threat_intel.alerting.digest import DigestExists, build_digest, write_digest
+    from icp_threat_intel.alerting.signals import (
+        SignalFilter,
+        build_signals_digest,
+        matched_signals,
+    )
     from icp_threat_intel.alerting.watch import latest_census, watched_canisters
     from icp_threat_intel.db.models import DetectionRow
     from icp_threat_intel.db.session import make_engine, make_session_factory
     from icp_threat_intel.verification.store import to_model
 
-    end = datetime.now(UTC)
+    try:
+        signal_filter = SignalFilter.create(keyword or (), ioc_only=ioc_only, feeds=feed or ())
+    except ValueError as exc:
+        typer.echo(f"digest: {exc}", err=True)
+        raise typer.Exit(code=2) from None
+    end = _now()
     start = end - timedelta(hours=hours)
     with make_session_factory(make_engine())() as session:
-        rows = session.scalars(select(DetectionRow).where(DetectionRow.updated_at >= start))
-        detections = [to_model(r) for r in rows]
-        watched, census = watched_canisters(session), latest_census(session)
-    report = build_digest(
-        detections, period_start=start, period_end=end, watched=watched, census=census
-    )
-    md, js = write_digest(report, out_dir)
-    typer.echo(f"digest: {len(detections)} detection(s) -> {md}, {js}")
+        matched = [p for p in matched_signals(session, start) if signal_filter.matches(p)]
+        # blocklists name canisters, not keywords: left out when a keyword filter is set
+        listed = (
+            []
+            if signal_filter.keywords
+            else [
+                r
+                for r in blocklisted_canisters(session, start, ioc_only=signal_filter.ioc_only)
+                if not signal_filter.feeds or set(r.feeds) & set(signal_filter.feeds)
+            ]
+        )
+        signals = matched if show_all else matched[:limit]
+        total = len(matched)
+        if signals_only:
+            detections, report = (
+                [],
+                build_signals_digest(
+                    signals,
+                    period_start=start,
+                    period_end=end,
+                    total=total,
+                    signal_filter=signal_filter,
+                    blocklisted=listed,
+                ),
+            )
+        else:
+            rows = session.scalars(select(DetectionRow).where(DetectionRow.updated_at >= start))
+            detections = [to_model(r) for r in rows]
+            report = build_digest(
+                detections,
+                period_start=start,
+                period_end=end,
+                watched=watched_canisters(session),
+                census=latest_census(session),
+                signals=signals,
+                signals_total=total,
+                signals_filter=signal_filter,
+                blocklisted=listed,
+            )
+    try:
+        md, js = write_digest(report, out_dir, overwrite=overwrite)
+    except DigestExists as exc:
+        typer.echo(f"{exc}; nothing written (use --overwrite to replace it)", err=True)
+        raise typer.Exit(code=1) from None
+    shown = f"{len(signals)} signal(s)"
+    if len(signals) < total:
+        shown = f"{len(signals)} of {total} signal(s)"
+    if listed:
+        shown += f", {len(listed)} blocklisted canister(s)"
+    if signals_only:
+        typer.echo(f"signals digest: {shown} -> {md}, {js}")
+    else:
+        typer.echo(f"digest: {len(detections)} detection(s), {shown} -> {md}, {js}")
